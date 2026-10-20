@@ -1,0 +1,91 @@
+from pathlib import Path
+from typing import Literal
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+AGENT_NAMES = ("orchestrator", "planner", "data_analyst", "ml_researcher", "reviewer")
+DEFAULT_MODEL = "minimax/minimax-m3.1-flash:free"
+
+AutonomyPolicy = Literal["approve-first", "yolo"]
+
+
+class DefaultsConfig(BaseModel):
+    target_percentile: int = Field(default=20, ge=1, le=100)
+    budget_usd: float = Field(default=10.0, gt=0)
+    submissions_per_day: int = Field(default=4, ge=1, le=10)
+    autonomy: AutonomyPolicy = "approve-first"
+    dry_run: bool = False
+
+
+class PathsConfig(BaseModel):
+    runs_dir: Path = Path("runs")
+
+
+class LLMClientConfig(BaseModel):
+    base_url: str = "https://openrouter.ai/api/v1"
+    timeout_s: int = Field(default=180, gt=0)
+    max_retries: int = Field(default=3, ge=0)
+
+
+class SlayerConfig(BaseModel):
+    defaults: DefaultsConfig = DefaultsConfig()
+    paths: PathsConfig = PathsConfig()
+    llm: LLMClientConfig = LLMClientConfig()
+
+
+class AgentModelConfig(BaseModel):
+    model: str
+    temperature: float = Field(default=0.2, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=4096, gt=0)
+
+
+class AgentsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    orchestrator: AgentModelConfig
+    planner: AgentModelConfig
+    data_analyst: AgentModelConfig
+    ml_researcher: AgentModelConfig
+    reviewer: AgentModelConfig
+
+
+class Secrets(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_file_encoding="utf-8")
+
+    openrouter_api_key: str = ""
+    kaggle_api_token: str = ""
+
+
+def _read_yaml_mapping(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} must contain a YAML mapping")
+    return data
+
+
+def load_slayer_config(path: Path | None = None) -> SlayerConfig:
+    data = _read_yaml_mapping(path or Path("config/slayer.yaml"))
+    return SlayerConfig.model_validate(data)
+
+
+def load_agents_config(path: Path | None = None) -> AgentsConfig:
+    data = _read_yaml_mapping(path or Path("config/agents.yaml"))
+    defaults = dict(data.get("defaults") or {})
+    defaults.setdefault("model", DEFAULT_MODEL)
+    unknown = set(data) - set(AGENT_NAMES) - {"defaults"}
+    if unknown:
+        raise ValueError(f"unknown agent entries in agents config: {sorted(unknown)}")
+    merged = {name: {**defaults, **(data.get(name) or {})} for name in AGENT_NAMES}
+    return AgentsConfig.model_validate(merged)
+
+
+def load_secrets(env_file: Path | None = None) -> Secrets:
+    if env_file is None:
+        return Secrets()
+    return Secrets(_env_file=env_file)

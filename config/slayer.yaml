@@ -1,0 +1,14 @@
+defaults:
+  target_percentile: 20
+  budget_usd: 10.0
+  submissions_per_day: 4
+  autonomy: approve-first
+  dry_run: false
+
+paths:
+  runs_dir: runs
+
+llm:
+  base_url: https://openrouter.ai/api/v1
+  timeout_s: 180
+  max_retries: 3

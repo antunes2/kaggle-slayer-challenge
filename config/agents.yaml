@@ -1,0 +1,11 @@
+defaults:
+  model: minimax/minimax-m3.1-flash:free
+  temperature: 0.2
+  max_tokens: 4096
+
+orchestrator: {}
+planner: {}
+data_analyst: {}
+ml_researcher: {}
+reviewer:
+  temperature: 0.0

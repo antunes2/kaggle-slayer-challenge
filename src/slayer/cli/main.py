@@ -1,0 +1,121 @@
+from pathlib import Path
+
+import typer
+
+from slayer._version import __version__
+from slayer.config import (
+    AGENT_NAMES,
+    load_agents_config,
+    load_secrets,
+    load_slayer_config,
+)
+
+app = typer.Typer(add_completion=False, help="Slayer — a team of agents that competes on Kaggle.")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"slayer {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _root(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show version and exit.",
+    ),
+) -> None:
+    """Slayer — a team of agents that competes on Kaggle."""
+
+
+def _mask(value: str) -> str:
+    if not value:
+        return "MISSING"
+    if len(value) <= 8:
+        return "set"
+    return f"{value[:4]}...{value[-4:]} ({len(value)} chars)"
+
+
+@app.command()
+def init(
+    config_dir: Path = typer.Option(
+        Path("config"), "--config-dir", help="Directory holding slayer.yaml and agents.yaml."
+    ),
+    env_file: Path = typer.Option(
+        Path(".env"), "--env-file", help="Env file holding API credentials."
+    ),
+) -> None:
+    """Validate configuration files, secrets, and API connectivity."""
+    typer.secho("Slayer init — environment check", bold=True)
+    ok = True
+
+    typer.echo("")
+    typer.echo("Config")
+    slayer_path = config_dir / "slayer.yaml"
+    try:
+        if slayer_path.exists():
+            cfg = load_slayer_config(slayer_path)
+            typer.secho(f"  {slayer_path}: loaded", fg="green")
+        else:
+            cfg = load_slayer_config(slayer_path)
+            typer.secho(f"  {slayer_path}: not found, using built-in defaults", fg="yellow")
+        d = cfg.defaults
+        typer.echo(
+            f"    target=top-{d.target_percentile}%  budget=${d.budget_usd}  "
+            f"submissions/day={d.submissions_per_day}  autonomy={d.autonomy}  dry_run={d.dry_run}"
+        )
+    except Exception as exc:
+        typer.secho(f"  {slayer_path}: INVALID — {exc}", fg="red")
+        ok = False
+
+    agents_path = config_dir / "agents.yaml"
+    try:
+        if agents_path.exists():
+            agents = load_agents_config(agents_path)
+            typer.secho(f"  {agents_path}: loaded", fg="green")
+        else:
+            agents = load_agents_config(agents_path)
+            typer.secho(f"  {agents_path}: not found, using built-in defaults", fg="yellow")
+        for name in AGENT_NAMES:
+            agent_cfg = getattr(agents, name)
+            typer.echo(
+                f"    {name:<14} model={agent_cfg.model}  temperature={agent_cfg.temperature}"
+            )
+    except Exception as exc:
+        typer.secho(f"  {agents_path}: INVALID — {exc}", fg="red")
+        ok = False
+
+    typer.echo("")
+    typer.echo("Secrets")
+    if not env_file.exists():
+        typer.secho(f"  ({env_file} not found; relying on process environment)", fg="yellow")
+    secrets = load_secrets(env_file)
+    for label, value in (
+        ("OPENROUTER_API_KEY", secrets.openrouter_api_key),
+        ("KAGGLE_API_TOKEN", secrets.kaggle_api_token),
+    ):
+        if value:
+            typer.secho(f"  {label}: {_mask(value)}", fg="green")
+        else:
+            typer.secho(f"  {label}: MISSING", fg="red")
+            ok = False
+
+    typer.echo("")
+    typer.echo("API pings")
+    typer.secho("  openrouter: pending (LLM client arrives in Phase 0 step 0.2)", fg="yellow")
+    typer.secho("  kaggle:     pending (Kaggle client arrives in Phase 0 step 0.4)", fg="yellow")
+
+    typer.echo("")
+    if ok:
+        typer.secho("Environment ready.", fg="green", bold=True)
+    else:
+        typer.secho("Environment NOT ready — fix the items above.", fg="red", bold=True)
+        raise typer.Exit(1)
+
+
+def main() -> None:
+    app()
