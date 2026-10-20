@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v0.4 (Phase 0 step 0.2: LLM client implemented, in review) · **Updated:** 2026-10-19 · **Owner:** Gabriel
+> **Status:** v0.5 (Phase 0 step 0.3: journal + registry implemented, in review) · **Updated:** 2026-10-19 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -286,7 +286,7 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 |------|-------|--------|
 | 0.1 | Scaffolding: repo layout, config system (pydantic-settings + YAML), `slayer init` (config + secrets checks), docs structure + ADRs D0001–D0005 | ✅ |
 | 0.2 | OpenRouter LLM client: chat + structured outputs + cost tracking + `slayer init` LLM ping | ✅ ([design](designs/01-llm-client.md)) |
-| 0.3 | Journal (JSONL) + run store + candidate registry (SQLite, per D0005) | ⬜ |
+| 0.3 | Journal (JSONL) + run store + candidate registry (SQLite, per D0005) | ✅ ([design](designs/02-journal-and-registry.md)) |
 | 0.4 | KaggleClient wrapper + quota manager + `slayer init` Kaggle ping | ⬜ |
 | 0.5 | Phase 0 acceptance: `slayer init` green end-to-end; unit tests green | ⬜ |
 
