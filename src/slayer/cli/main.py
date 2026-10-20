@@ -3,6 +3,7 @@ from pathlib import Path
 import typer
 
 from slayer._version import __version__
+from slayer.analysis import AnalysisError
 from slayer.config import (
     AGENT_NAMES,
     DEFAULT_MODEL,
@@ -209,11 +210,25 @@ def run(
     if not secrets.kaggle_api_token:
         typer.secho("KAGGLE_API_TOKEN missing — cannot run without Kaggle access.", fg="red")
         raise typer.Exit(1)
+    if not secrets.openrouter_api_key:
+        typer.secho("OPENROUTER_API_KEY missing — agents cannot run.", fg="red")
+        raise typer.Exit(1)
     try:
         kaggle = KaggleClient.from_token(secrets.kaggle_api_token)
     except KaggleError as exc:
         typer.secho(f"kaggle authentication failed: {exc}", fg="red")
         raise typer.Exit(1) from exc
+    try:
+        agents_cfg = load_agents_config(config_dir / "agents.yaml")
+    except Exception as exc:
+        typer.secho(f"invalid agents config: {exc}", fg="red")
+        raise typer.Exit(1) from exc
+    llm = LLMClient(
+        api_key=secrets.openrouter_api_key,
+        base_url=cfg.llm.base_url,
+        timeout_s=cfg.llm.timeout_s,
+        max_retries=cfg.llm.max_retries,
+    )
 
     store = RunStore(cfg.paths.runs_dir)
     run = store.create(competition, defaults)
@@ -227,10 +242,12 @@ def run(
         kaggle=kaggle,
         store=store,
         reporter=lambda message: typer.echo(f"  {message}"),
+        llm=llm,
+        agent_configs=agents_cfg,
     )
     try:
         final = LoopEngine(ctx).start()
-    except (KaggleError, DataCollectionError) as exc:
+    except (KaggleError, DataCollectionError, AnalysisError, LLMError) as exc:
         typer.secho(f"run failed: {exc}", fg="red", bold=True)
         raise typer.Exit(1) from exc
     except Exception as exc:

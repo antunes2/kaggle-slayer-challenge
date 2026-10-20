@@ -187,6 +187,28 @@ def test_missing_choices_raises():
         client.complete([{"role": "user", "content": "hi"}], "test/model")
 
 
+def test_truncated_completion_raises_actionable_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "test/model",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": None},
+                        "finish_reason": "length",
+                    }
+                ],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 4000, "total_tokens": 4100},
+                "cost": 0.0,
+            },
+        )
+
+    client = _client(handler)
+    with pytest.raises(LLMError, match="max_tokens"):
+        client.complete([{"role": "user", "content": "hi"}], "test/model")
+
+
 def test_empty_api_key_raises():
     with pytest.raises(LLMError, match="API key is empty"):
         LLMClient(api_key="")

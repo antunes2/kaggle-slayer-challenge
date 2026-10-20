@@ -5,13 +5,19 @@ import pytest
 
 from slayer.config import DefaultsConfig
 from slayer.kaggle import CompetitionInfo, KaggleError
-from slayer.loop import LoopEngine, RunContext
+from slayer.loop import LoopEngine, Phase, RunContext
+from slayer.loop.phases import HANDLERS
 from slayer.workspace import EventType, RunStatus, RunStore
 
 
 class FakeKaggle:
     def __init__(self) -> None:
         self.downloads: list[str] = []
+
+    def list_files(self, competition: str):
+        from types import SimpleNamespace
+
+        return [SimpleNamespace(name="train.csv", total_bytes=10)]
 
     def find_competition(self, ref: str, **kwargs) -> CompetitionInfo:
         return CompetitionInfo(
@@ -28,6 +34,7 @@ class FakeKaggle:
         with zipfile.ZipFile(zip_path, "w") as zf:
             zf.writestr("train.csv", "id,target\n1,0\n")
             zf.writestr("test.csv", "id\n2\n")
+            zf.writestr("sample_submission.csv", "id,target\n2,0.5\n")
         return zip_path
 
 
@@ -44,11 +51,15 @@ def _make_ctx(tmp_path, kaggle) -> tuple[RunStore, RunContext]:
     return store, ctx
 
 
-def test_engine_runs_init_and_data_collection_then_pauses(tmp_path) -> None:
+def test_engine_runs_implemented_phases_then_pauses(tmp_path) -> None:
     kaggle = FakeKaggle()
     store, ctx = _make_ctx(tmp_path, kaggle)
+    handlers = {
+        Phase.INIT: HANDLERS[Phase.INIT],
+        Phase.DATA_COLLECTION: HANDLERS[Phase.DATA_COLLECTION],
+    }
 
-    final = LoopEngine(ctx).start()
+    final = LoopEngine(ctx, handlers=handlers).start()
 
     assert final.status == RunStatus.PAUSED
     assert kaggle.downloads == ["comp-x"]
@@ -59,14 +70,14 @@ def test_engine_runs_init_and_data_collection_then_pauses(tmp_path) -> None:
 
     assert (ctx.run.workspace("data") / "train.csv").is_file()
     manifest = json.loads((ctx.run.workspace("data") / "manifest.json").read_text())
-    assert len(manifest["files"]) == 2
+    assert len(manifest["files"]) == 3
     assert manifest["total_bytes"] > 0
 
     phases = [e.data["phase"] for e in ctx.journal.read(type=EventType.PHASE_ENTER)]
     assert phases == ["init", "data_collection"]
     assert ctx.journal.read(type=EventType.COMPETITION_CONTEXT)[0].data["ref"] == "comp-x"
     collected = ctx.journal.read(type=EventType.DATA_COLLECTED)
-    assert collected[0].data["files"] == 2
+    assert collected[0].data["files"] == 3
 
     paused = ctx.journal.read(type=EventType.LOOP_PAUSED)
     assert "analysis" in paused[0].data["reason"]
@@ -92,8 +103,12 @@ def test_engine_reports_phase_activity(tmp_path) -> None:
     store, ctx = _make_ctx(tmp_path, FakeKaggle())
     messages: list[str] = []
     ctx.reporter = messages.append
+    handlers = {
+        Phase.INIT: HANDLERS[Phase.INIT],
+        Phase.DATA_COLLECTION: HANDLERS[Phase.DATA_COLLECTION],
+    }
 
-    LoopEngine(ctx).start()
+    LoopEngine(ctx, handlers=handlers).start()
 
     assert any("[phase] init" in m for m in messages)
     assert any("[phase] data_collection" in m for m in messages)

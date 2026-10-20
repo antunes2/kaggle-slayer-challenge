@@ -14,3 +14,4 @@ errors, finish with a short **Retro** section — the doc stays true, not aspira
 - [02 — Journal, Run Store & Candidate Registry](02-journal-and-registry.md)
 - [03 — Kaggle Client & Quota Manager](03-kaggle-client.md)
 - [04 — Run Loop Engine, INIT & DATA_COLLECTION](04-run-loop-and-data-collection.md)
+- [05 — ANALYSIS: Deterministic Profiler + Data Analyst Agent](05-analysis-and-data-analyst.md)

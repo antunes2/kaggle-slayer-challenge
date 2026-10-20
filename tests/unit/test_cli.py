@@ -106,20 +106,57 @@ class _FakeRunKaggle:
             max_daily_submissions=5,
         )
 
+    def list_files(self, competition: str):
+        from types import SimpleNamespace
+
+        return [SimpleNamespace(name="train.csv", total_bytes=10)]
+
     def download_files(self, competition: str, target_dir, force: bool = False):
         import zipfile
 
         zip_path = target_dir / f"{competition}.zip"
         with zipfile.ZipFile(zip_path, "w") as zf:
-            zf.writestr("train.csv", "id,target\n1,0\n")
+            zf.writestr("train.csv", "id,x,target\n1,5,0\n2,6,1\n3,7,0\n")
+            zf.writestr("test.csv", "id,x\n4,8\n")
+            zf.writestr("sample_submission.csv", "id,target\n4,0.5\n")
         return zip_path
+
+
+class _FakeLLM:
+    def __init__(self, api_key: str = "", **kwargs) -> None:
+        pass
+
+    def complete_structured(self, messages, model, response_model, **kwargs):
+        from slayer.llm import LLMResponse
+        from slayer.schemas import DataAnalystOutput, DataReport, FeatureIdea, FeaturePlan
+
+        output = DataAnalystOutput(
+            report=DataReport(
+                problem_type="binary_classification",
+                target_column="target",
+                summary="ok",
+                key_findings=["f"],
+                data_quality_issues=[],
+                risks=[],
+            ),
+            feature_plan=FeaturePlan(
+                ideas=[
+                    FeatureIdea(
+                        name="i1", rationale="r", expected_value="medium", based_on_columns=["x"]
+                    )
+                ]
+            ),
+        )
+        return LLMResponse(content="{}", model=model), output
 
 
 def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
     import yaml
 
     monkeypatch.delenv("KAGGLE_API_TOKEN", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setattr(cli_main, "KaggleClient", _FakeRunKaggle)
+    monkeypatch.setattr(cli_main, "LLMClient", _FakeLLM)
 
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
@@ -127,7 +164,10 @@ def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
         yaml.safe_dump({"paths": {"runs_dir": str(tmp_path / "runs")}}), encoding="utf-8"
     )
     env = tmp_path / ".env"
-    env.write_text("KAGGLE_API_TOKEN=tok123456789012345\n", encoding="utf-8")
+    env.write_text(
+        "KAGGLE_API_TOKEN=tok123456789012345\nOPENROUTER_API_KEY=key123456789012345\n",
+        encoding="utf-8",
+    )
 
     result = runner.invoke(
         app,
@@ -140,6 +180,7 @@ def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
     runs = list((tmp_path / "runs").iterdir())
     assert len(runs) == 1
     assert (runs[0] / "workspace" / "data" / "train.csv").is_file()
+    assert (runs[0] / "workspace" / "reports" / "data_report.json").is_file()
     assert (runs[0] / "journal.jsonl").is_file()
 
 

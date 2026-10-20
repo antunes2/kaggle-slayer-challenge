@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v0.8 (Phase 1 step 1.1: loop engine + data collection, in review) · **Updated:** 2026-10-19 · **Owner:** Gabriel
+> **Status:** v0.9 (Phase 1 complete: live EDA report on playground-series-s6e9, in review) · **Updated:** 2026-10-19 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -96,7 +96,7 @@ Loop responsibilities per phase:
 
 1. **INIT** — create run + workspace, fetch competition metadata (title, metric, deadline, quota), write `reports/competition.json`.
 2. **DATA_COLLECTION** — download competition data via Kaggle API, safe-unzip, write sha256 manifest.
-3. **ANALYSIS** — data analyst writes & runs EDA code → `DataReport` + `FeaturePlan` (schema-validated).
+3. **ANALYSIS** — deterministic profiler computes the dataset statistics; the data analyst agent interprets them → `DataReport` + `FeaturePlan` (schema-validated, per [design 05](designs/05-analysis-and-data-analyst.md)).
 4. **PLANNING** — planner agent reads comp metadata **+ DataReport** → `StrategyPlan` (schema-validated): problem type, metric, CV protocol, modelling roadmap, submission policy.
 5. **BASELINE** — ML researcher writes a minimal pipeline + CV harness → first `Candidate` with local CV score.
 6. **ITERATE** — researcher proposes experiments (features, models, tuning, ensembling); each runs locally through the standard CV harness; results tracked.
@@ -114,7 +114,7 @@ agentic tool-using agent (dynamic replanning) is a later milestone (§11, Phase 
 |-------|-------------|----------|-------|
 | Orchestrator | `prompts/orchestrator.md` | phase transitions, user updates, submit/hold decisions | cheap-ish model, low temperature |
 | Planner | `prompts/planner.md` | `StrategyPlan` | needs strong reasoning model |
-| Data Analyst | `prompts/data_analyst.md` | `DataReport`, `FeaturePlan` | can execute code in sandbox |
+| Data Analyst | `prompts/data_analyst.md` | `DataReport`, `FeaturePlan` | interprets deterministic profiler output (see design 05) |
 | ML Researcher | `prompts/ml_researcher.md` | `ModelCandidate`, `CVResult` | writes feature/training code |
 | Reviewer | `prompts/reviewer.md` | `ReviewVerdict` | adversarial: hunts leakage/overfit |
 
@@ -271,7 +271,7 @@ runs/                      # run artifacts (gitignored)
 | Phase | Scope | Key deliverables | Acceptance criteria | Status |
 |-------|-------|------------------|---------------------|--------|
 | **0. Foundation** | infra only | config loading; OpenRouter client w/ JSON mode + cost tracking; KaggleClient wrapper; journal + run store; `slayer init` | `slayer init` pings both APIs green; journal round-trip unit-tested | ✅ |
-| **1. Data collection & EDA** | INIT → DATA_COLLECTION → ANALYSIS | loop engine + `slayer run <comp>`; download + safe unzip + manifest; data analyst EDA → `DataReport` | Real comp: data on disk, human-readable EDA report in `reports/` | 🔶 |
+| **1. Data collection & EDA** | INIT → DATA_COLLECTION → ANALYSIS | loop engine + `slayer run <comp>`; download + safe unzip + manifest; profiler + data analyst → `DataReport` | Real comp: data on disk, human-readable EDA report in `reports/` | ✅ |
 | **2. Baseline & first submission (mocked)** | PLANNING → BASELINE → REVIEW → SUBMIT | planner `StrategyPlan`; CV harness; researcher baseline codegen; reviewer gate; `SubmissionSink` abstraction (**MockSink** for MVP); submission approval flow | End-to-end pipeline completes with submission recorded via MockSink; approval + quota logic exercised; zero real quota spent | ⬜ |
 | **2b. First live submission** | go live | flip to `KaggleSink`; same pipeline against a Playground Series comp | Real submission accepted by Kaggle; score recorded in journal | ⬜ |
 | **3. Iteration engine** | the heart | experiment loop; candidate registry (experiments.db); quota-aware submit policy; CV/LB tracking; feedback from LB → planner | ≥5 sequential iterations with measurable CV improvement; no quota violations | ⬜ |
@@ -295,8 +295,8 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 
 | Step | Scope | Status |
 |------|-------|--------|
-| 1.1 | Loop engine (phase machine, pause/fail semantics) + `slayer run` command + INIT (competition context) + DATA_COLLECTION (download, safe unzip, sha256 manifest) | 🔶 |
-| 1.2 | ANALYSIS: data analyst agent — sandboxed EDA execution → `DataReport` | ⬜ |
+| 1.1 | Loop engine (phase machine, pause/fail semantics) + `slayer run` command + INIT (competition context, rules probe) + DATA_COLLECTION (download, safe unzip, sha256 manifest) | ✅ |
+| 1.2 | ANALYSIS: deterministic profiler + data analyst agent → `DataReport` + `FeaturePlan` | ✅ ([design](designs/05-analysis-and-data-analyst.md)) |
 
 ## 12. Testing Strategy
 

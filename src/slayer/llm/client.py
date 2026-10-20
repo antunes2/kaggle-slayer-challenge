@@ -168,7 +168,15 @@ class LLMClient:
         choices = data.get("choices") or []
         if not choices:
             raise LLMError(f"response missing choices: {json.dumps(data)[:200]}")
-        content = choices[0].get("message", {}).get("content", "")
+        message = choices[0].get("message") or {}
+        content = message.get("content") or ""
+        finish_reason = choices[0].get("finish_reason")
+        if not content:
+            raise LLMError(
+                f"empty completion content (finish_reason={finish_reason}); the model likely "
+                "exhausted max_tokens before emitting output (reasoning models burn tokens "
+                "on reasoning first) — raise max_tokens for this agent"
+            )
         usage_data = data.get("usage") or {}
         usage = LLMUsage(
             prompt_tokens=usage_data.get("prompt_tokens", 0),

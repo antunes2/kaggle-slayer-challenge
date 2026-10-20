@@ -38,7 +38,7 @@ class SlayerConfig(BaseModel):
 class AgentModelConfig(BaseModel):
     model: str
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=4096, gt=0)
+    max_tokens: int = Field(default=16384, gt=0)
 
 
 class AgentsConfig(BaseModel):

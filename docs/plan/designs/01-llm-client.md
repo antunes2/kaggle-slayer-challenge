@@ -67,6 +67,11 @@ per-run budget enforcement happens in step 0.3 / Phase 3 — the client only mea
 
 Implemented as designed. Notes:
 - The `{...}` fallback extraction is genuinely needed even with `json_schema` requested —
-  free-tier models don't always honor `response_format`.
+  free-tier models don't always honor `response_format` (they also invent their own JSON
+  shape; embedding the schema in the prompt — done in `Agent.run_structured` — is the
+  reliable path for weak models).
+- Reasoning models can exhaust `max_tokens` before emitting any content
+  (`content: null`, `finish_reason: "length"`). The client now raises an actionable
+  `LLMError` for this case; default agent `max_tokens` is 16384.
 - Cost field: OpenRouter includes top-level `cost` per completion; we only trust it when
   the value is numeric, else `cost_usd=None` and the call counts as unpriced.

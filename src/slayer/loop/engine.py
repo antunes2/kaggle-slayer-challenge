@@ -4,7 +4,9 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
+from slayer.config import AgentsConfig
 from slayer.kaggle import KaggleClient
+from slayer.llm import LLMClient
 from slayer.workspace import CandidateRegistry, EventType, Journal, Run, RunStatus, RunStore
 
 Handler = Callable[["RunContext"], None]
@@ -43,6 +45,8 @@ class RunContext:
     kaggle: KaggleClient
     store: RunStore
     reporter: Callable[[str], None] | None = None
+    llm: LLMClient | None = None
+    agent_configs: AgentsConfig | None = None
 
     def say(self, message: str) -> None:
         if self.reporter is not None:
