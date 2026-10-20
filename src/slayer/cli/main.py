@@ -5,10 +5,12 @@ import typer
 from slayer._version import __version__
 from slayer.config import (
     AGENT_NAMES,
+    DEFAULT_MODEL,
     load_agents_config,
     load_secrets,
     load_slayer_config,
 )
+from slayer.llm import LLMClient, LLMError
 
 app = typer.Typer(add_completion=False, help="Slayer — a team of agents that competes on Kaggle.")
 
@@ -40,6 +42,22 @@ def _mask(value: str) -> str:
     return f"{value[:4]}...{value[-4:]} ({len(value)} chars)"
 
 
+def _llm_ping(
+    api_key: str, base_url: str, timeout_s: int, max_retries: int, model: str
+) -> tuple[bool, str]:
+    if not api_key:
+        return False, "skipped (no API key)"
+    try:
+        client = LLMClient(
+            api_key=api_key, base_url=base_url, timeout_s=timeout_s, max_retries=max_retries
+        )
+        response = client.ping(model)
+        snippet = response.content.strip().replace("\n", " ")[:40]
+        return True, f"ok (model={model}, reply={snippet!r})"
+    except LLMError as exc:
+        return False, f"failed (model={model}): {exc}"
+
+
 @app.command()
 def init(
     config_dir: Path = typer.Option(
@@ -55,6 +73,7 @@ def init(
 
     typer.echo("")
     typer.echo("Config")
+    cfg = None
     slayer_path = config_dir / "slayer.yaml"
     try:
         if slayer_path.exists():
@@ -106,7 +125,18 @@ def init(
 
     typer.echo("")
     typer.echo("API pings")
-    typer.secho("  openrouter: pending (LLM client arrives in Phase 0 step 0.2)", fg="yellow")
+    if secrets.openrouter_api_key and cfg is not None:
+        ok_ping, detail = _llm_ping(
+            secrets.openrouter_api_key,
+            cfg.llm.base_url,
+            cfg.llm.timeout_s,
+            cfg.llm.max_retries,
+            DEFAULT_MODEL,
+        )
+        typer.secho(f"  openrouter: {detail}", fg="green" if ok_ping else "red")
+        ok = ok and ok_ping
+    else:
+        typer.secho("  openrouter: skipped (no API key or invalid config)", fg="yellow")
     typer.secho("  kaggle:     pending (Kaggle client arrives in Phase 0 step 0.4)", fg="yellow")
 
     typer.echo("")

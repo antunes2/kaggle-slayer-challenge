@@ -10,4 +10,4 @@ errors, finish with a short **Retro** section — the doc stays true, not aspira
 
 ## Index
 
-*(none yet — first design doc lands with Phase 0 step 2: `01-llm-client.md`)*
+- [01 — LLM Client (OpenRouter)](01-llm-client.md)
