@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v0.5 (Phase 0 step 0.3: journal + registry implemented, in review) · **Updated:** 2026-10-19 · **Owner:** Gabriel
+> **Status:** v0.7 (Phase 0 complete) · **Updated:** 2026-10-19 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -269,7 +269,7 @@ runs/                      # run artifacts (gitignored)
 
 | Phase | Scope | Key deliverables | Acceptance criteria | Status |
 |-------|-------|------------------|---------------------|--------|
-| **0. Foundation** | infra only | config loading; OpenRouter client w/ JSON mode + cost tracking; KaggleClient wrapper; journal + run store; `slayer init` | `slayer init` pings both APIs green; journal round-trip unit-tested | 🔶 |
+| **0. Foundation** | infra only | config loading; OpenRouter client w/ JSON mode + cost tracking; KaggleClient wrapper; journal + run store; `slayer init` | `slayer init` pings both APIs green; journal round-trip unit-tested | ✅ |
 | **1. Data collection** | INIT → DATA_COLLECTION | run/workspace scaffolding; `slayer run <comp>`; download + manifest; data analyst EDA → `DataReport` | Real comp: data on disk, human-readable EDA report in `reports/` | ⬜ |
 | **2. Baseline & first submission (mocked)** | PLANNING → ANALYSIS → BASELINE → REVIEW → SUBMIT | planner `StrategyPlan`; CV harness; researcher baseline codegen; reviewer gate; `SubmissionSink` abstraction (**MockSink** for MVP); submission approval flow | End-to-end pipeline completes with submission recorded via MockSink; approval + quota logic exercised; zero real quota spent | ⬜ |
 | **2b. First live submission** | go live | flip to `KaggleSink`; same pipeline against a Playground Series comp | Real submission accepted by Kaggle; score recorded in journal | ⬜ |
@@ -287,8 +287,8 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | 0.1 | Scaffolding: repo layout, config system (pydantic-settings + YAML), `slayer init` (config + secrets checks), docs structure + ADRs D0001–D0005 | ✅ |
 | 0.2 | OpenRouter LLM client: chat + structured outputs + cost tracking + `slayer init` LLM ping | ✅ ([design](designs/01-llm-client.md)) |
 | 0.3 | Journal (JSONL) + run store + candidate registry (SQLite, per D0005) | ✅ ([design](designs/02-journal-and-registry.md)) |
-| 0.4 | KaggleClient wrapper + quota manager + `slayer init` Kaggle ping | ⬜ |
-| 0.5 | Phase 0 acceptance: `slayer init` green end-to-end; unit tests green | ⬜ |
+| 0.4 | KaggleClient wrapper + quota manager + `slayer init` Kaggle ping | ✅ ([design](designs/03-kaggle-client.md)) |
+| 0.5 | Phase 0 acceptance: `slayer init` green end-to-end; unit tests green | ✅ |
 
 ## 12. Testing Strategy
 

@@ -10,6 +10,7 @@ from slayer.config import (
     load_secrets,
     load_slayer_config,
 )
+from slayer.kaggle import KaggleClient, KaggleError
 from slayer.llm import LLMClient, LLMError
 
 app = typer.Typer(add_completion=False, help="Slayer — a team of agents that competes on Kaggle.")
@@ -56,6 +57,17 @@ def _llm_ping(
         return True, f"ok (model={model}, reply={snippet!r})"
     except LLMError as exc:
         return False, f"failed (model={model}): {exc}"
+
+
+def _kaggle_ping(token: str) -> tuple[bool, str]:
+    if not token:
+        return False, "skipped (no token)"
+    try:
+        client = KaggleClient.from_token(token)
+        username = client.ping()
+        return True, f"ok (user={username})"
+    except KaggleError as exc:
+        return False, f"failed: {exc}"
 
 
 @app.command()
@@ -137,7 +149,12 @@ def init(
         ok = ok and ok_ping
     else:
         typer.secho("  openrouter: skipped (no API key or invalid config)", fg="yellow")
-    typer.secho("  kaggle:     pending (Kaggle client arrives in Phase 0 step 0.4)", fg="yellow")
+    if secrets.kaggle_api_token:
+        ok_ping, detail = _kaggle_ping(secrets.kaggle_api_token)
+        typer.secho(f"  kaggle:     {detail}", fg="green" if ok_ping else "red")
+        ok = ok and ok_ping
+    else:
+        typer.secho("  kaggle:     skipped (no token)", fg="yellow")
 
     typer.echo("")
     if ok:

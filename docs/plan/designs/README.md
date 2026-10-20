@@ -12,3 +12,4 @@ errors, finish with a short **Retro** section — the doc stays true, not aspira
 
 - [01 — LLM Client (OpenRouter)](01-llm-client.md)
 - [02 — Journal, Run Store & Candidate Registry](02-journal-and-registry.md)
+- [03 — Kaggle Client & Quota Manager](03-kaggle-client.md)
