@@ -154,7 +154,7 @@ slayer init                          # verify .env, ping OpenRouter + Kaggle aut
 slayer competitions [list] [--filter]# browse active competitions
 slayer run <competition>             # start the orchestration loop (main command)
     --target top-20                  # goal percentile (default 20)
-    --autonomy approve-first|yolo    # approval policy (default approve-first)
+    --autonomy approve-first|agentic # approval policy (default approve-first)
     --budget-usd 10                  # LLM spend cap for this run
     --submissions-per-day 4          # stay under Kaggle quota
     --dry-run                        # route submissions to MockSink (no real API calls)
@@ -178,7 +178,7 @@ keeps IPC simple; daemonization + `attach` is Phase 5.
 
 Default is **human-in-the-loop for irreversible/irreplaceable actions**:
 
-| Action | `approve-first` (default) | `yolo` |
+| Action | `approve-first` (default) | `agentic` |
 |--------|--------------------------|---------|
 | Download data, EDA, local CV | automatic | automatic |
 | Spend > 50% of run budget | warn + approve | warn only |
@@ -333,5 +333,5 @@ Full structure and workflow: [`docs/plan/README.md`](README.md).
 - `changes/C####-*.md` — direction changes / pivots.
 - `designs/NN-*.md` — feature design docs, written before implementation, retro after.
 
-Every implementation step = one commit (code + its docs together), reviewed by the user
-before the next step starts.
+Every implementation step: implement → present for review → **commit only after user
+approval** (code + its docs together). See [C0001](changes/C0001-no-commit-before-review.md).

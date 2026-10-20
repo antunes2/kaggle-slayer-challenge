@@ -22,5 +22,5 @@ deleted rather than left to rot.
    `changes/C####-...` (what changed, why, plan impact) and update the master plan.
 4. **Feature work starts** → write `designs/NN-...` first, then code; docs and code
    land in the same commit.
-5. **Each implementation step is one commit.** The user reviews the commit before the
-   next step starts.
+5. **Each implementation step:** implement → present for review → **commit only after
+   the user approves**. Never commit unreviewed work.

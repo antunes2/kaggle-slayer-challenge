@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 AGENT_NAMES = ("orchestrator", "planner", "data_analyst", "ml_researcher", "reviewer")
 DEFAULT_MODEL = "minimax/minimax-m3.1-flash:free"
 
-AutonomyPolicy = Literal["approve-first", "yolo"]
+AutonomyPolicy = Literal["approve-first", "agentic"]
 
 
 class DefaultsConfig(BaseModel):

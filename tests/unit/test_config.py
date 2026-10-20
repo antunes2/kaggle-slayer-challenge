@@ -31,11 +31,12 @@ def test_slayer_config_defaults_when_file_missing(tmp_path: Path) -> None:
 def test_slayer_config_loads_values(tmp_path: Path) -> None:
     path = tmp_path / "slayer.yaml"
     _write_yaml(
-        path, {"defaults": {"budget_usd": 5.5, "autonomy": "yolo"}, "paths": {"runs_dir": "other"}}
+        path,
+        {"defaults": {"budget_usd": 5.5, "autonomy": "agentic"}, "paths": {"runs_dir": "other"}},
     )
     cfg = load_slayer_config(path)
     assert cfg.defaults.budget_usd == 5.5
-    assert cfg.defaults.autonomy == "yolo"
+    assert cfg.defaults.autonomy == "agentic"
     assert cfg.paths.runs_dir == Path("other")
     assert cfg.defaults.target_percentile == 20
 

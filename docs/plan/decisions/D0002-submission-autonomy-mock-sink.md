@@ -14,7 +14,7 @@ while debugging is unacceptable.
 1. **Approve-first** — every submission requires explicit user approval.
 2. **Auto after first 2** — user approves the first two; then auto-submit when CV
    improves and the reviewer approves.
-3. **Full yolo** — never ask; rely on internal gates only.
+3. **Agentic** — never ask; rely on internal gates only.
 
 ## Decision
 

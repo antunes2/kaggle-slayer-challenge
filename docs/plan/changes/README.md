@@ -26,4 +26,4 @@ Which sections of `00-implementation-plan.md` were updated, and which ADRs
 
 ## Index
 
-*(none yet)*
+- [C0001 — Workflow change: no commit before user review](C0001-no-commit-before-review.md)
