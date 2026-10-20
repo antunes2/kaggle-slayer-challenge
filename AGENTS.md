@@ -5,8 +5,13 @@
 - **Never commit before user review.** Each implementation step: implement → present the
   changes for review → commit only after the user approves.
 - Each step is one logical unit of work; code and its docs land in the same commit.
+- **Every function gets a short docstring** — basic documentation of what it does; not
+  perfect, just present.
+- **At every phase completion**, report to the user: what was implemented (with the key
+  design decisions), the current risks, and opportunities/new routes worth considering
+  (including feature removal) — with reasoned explanations, so the user can steer.
 - Project documentation lives in `docs/plan/` — update the master plan (statuses,
-  decisions, Phase 0 step breakdown) as part of any step that completes or changes work.
+  decisions, phase step breakdowns) as part of any step that completes or changes work.
   See `docs/plan/README.md` for the question / decision / change / design conventions.
 
 ## Project
