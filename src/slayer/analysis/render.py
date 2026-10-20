@@ -3,6 +3,7 @@ from slayer.schemas import DataAnalystOutput
 
 
 def render_profile_md(profile: DatasetProfile) -> str:
+    """Render the dataset profile as markdown for the analyst agent."""
     lines = [f"# Dataset profile — {profile.competition}", ""]
     lines.append(f"- train: {profile.train_rows:,} rows x {profile.train_cols} columns")
     lines.append(f"- test: {profile.test_rows:,} rows")
@@ -36,6 +37,7 @@ def render_profile_md(profile: DatasetProfile) -> str:
 
 
 def render_data_report_md(output: DataAnalystOutput) -> str:
+    """Render the analyst's report and feature plan as human-readable markdown."""
     report = output.report
     lines = [f"# Data report — {report.problem_type} on `{report.target_column}`", ""]
     lines.append(report.summary)

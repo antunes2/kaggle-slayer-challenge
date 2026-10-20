@@ -14,6 +14,8 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class AgentError(Exception):
+    """Raised when an agent cannot be constructed or run."""
+
     pass
 
 
@@ -29,6 +31,7 @@ class Agent:
         run_id: str,
         prompts_dir: Path | None = None,
     ) -> None:
+        """Load the agent's prompt and store its clients and config."""
         self._llm = llm
         self._config = config
         self._journal = journal
@@ -37,12 +40,14 @@ class Agent:
         self.system_prompt = self._load_prompt()
 
     def _load_prompt(self) -> str:
+        """Read the agent's system prompt from its markdown file."""
         path = self._prompts_dir / f"{self.prompt_file}.md"
         if not path.exists():
             raise AgentError(f"prompt file missing: {path}")
         return path.read_text(encoding="utf-8")
 
     def run_structured(self, user_message: str, response_model: type[T]) -> tuple[LLMResponse, T]:
+        """Run one schema-validated LLM call and journal its usage/cost."""
         schema = json.dumps(response_model.model_json_schema(), indent=2)
         full_message = (
             f"{user_message}\n\n"

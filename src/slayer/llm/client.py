@@ -35,18 +35,25 @@ class CostReport(BaseModel):
 
 
 class LLMError(Exception):
+    """Base error for LLM client failures."""
+
     def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        """Wrap a failure message with an optional HTTP status code."""
         super().__init__(message)
         self.status_code = status_code
 
 
 class LLMValidationError(LLMError):
+    """Raised when structured output fails schema validation."""
+
     def __init__(self, message: str, raw: str) -> None:
+        """Keep the raw model output for debugging."""
         super().__init__(message)
         self.raw = raw
 
 
 def _retryable(status_code: int) -> bool:
+    """Whether an HTTP status code is transient and worth retrying."""
     return status_code == 408 or status_code == 429 or status_code >= 500
 
 
@@ -60,6 +67,7 @@ class LLMClient:
         retry_wait_s: float = 0.5,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
+        """Configure the client with credentials, transport, and retry policy."""
         if not api_key:
             raise LLMError("OpenRouter API key is empty")
         self._api_key = api_key
@@ -75,6 +83,7 @@ class LLMClient:
 
     @property
     def cost(self) -> CostReport:
+        """Accumulated usage and cost across all calls made by this client."""
         return CostReport(
             calls=self._calls,
             total_tokens=self._tokens,
@@ -91,6 +100,7 @@ class LLMClient:
         max_tokens: int = 4096,
         response_model: type[BaseModel] | None = None,
     ) -> LLMResponse:
+        """Run one chat completion, optionally requesting a JSON schema output."""
         payload: dict = {
             "model": model,
             "messages": [dict(m) for m in messages],
@@ -117,6 +127,7 @@ class LLMClient:
         temperature: float = 0.2,
         max_tokens: int = 4096,
     ) -> tuple[LLMResponse, T]:
+        """Complete a request and validate the reply against a pydantic model."""
         response = self.complete(
             messages,
             model,
@@ -128,6 +139,7 @@ class LLMClient:
         return response, parsed
 
     def ping(self, model: str) -> LLMResponse:
+        """Send a tiny 'reply ok' request to verify connectivity and auth."""
         return self.complete(
             [Message(role="user", content="Reply with exactly: ok")],
             model,
@@ -136,6 +148,7 @@ class LLMClient:
         )
 
     def _request(self, payload: dict) -> dict:
+        """POST the payload with retries and backoff; returns the parsed JSON."""
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
@@ -165,6 +178,7 @@ class LLMClient:
         raise last_error
 
     def _parse(self, data: dict, *, fallback_model: str) -> LLMResponse:
+        """Convert an OpenRouter response into an LLMResponse, tracking usage."""
         choices = data.get("choices") or []
         if not choices:
             raise LLMError(f"response missing choices: {json.dumps(data)[:200]}")
@@ -200,6 +214,7 @@ class LLMClient:
 
     @staticmethod
     def _extract_json(content: str) -> dict:
+        """Parse JSON from a reply, falling back to the outermost {...} block."""
         try:
             return json.loads(content)
         except json.JSONDecodeError:
@@ -211,6 +226,7 @@ class LLMClient:
 
     @classmethod
     def _validate(cls, content: str, response_model: type[T]) -> T:
+        """Validate raw content against a pydantic model, raising a clear error."""
         try:
             data = cls._extract_json(content)
             return response_model.model_validate(data)

@@ -70,6 +70,16 @@ slayer run <competition> [ --budget-usd | --autonomy | --dry-run/--live | --subm
 - CLI: end-to-end `slayer run` with fake kaggle client + tmp runs dir → exit 0, run
   created, journal on disk.
 
+## Addendum: data cache (step 2.1b)
+
+DATA_COLLECTION now caches the competition zip under `runs/_cache/<slug>/` with a
+validity manifest (remote file list + zip sha256). A new run **reuses the cache** when
+the remote file list (names + sizes) matches; any remote change or `--refresh-data`
+forces a redownload. The cache directory is invisible to `RunStore.list()` (no
+`run.json`). Validity is name+size based — content hashes of remote files are not
+available without downloading, so a same-size swap is the one blind spot; the
+`--refresh-data` flag is the escape hatch.
+
 ## Retro
 
 Implemented as designed. Live-run findings (against `playground-series-s6e9`):

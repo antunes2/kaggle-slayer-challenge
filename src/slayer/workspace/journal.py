@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 
 class EventType:
+    """Known journal event type constants (free-form strings are allowed too)."""
+
     RUN_CREATED = "run.created"
     RUN_STATUS = "run.status_changed"
     PHASE_ENTER = "phase.enter"
@@ -25,6 +27,8 @@ class EventType:
 
 
 class JournalEvent(BaseModel):
+    """One append-only event: timestamp, agent, type, and payload."""
+
     ts: str
     run: str | None = None
     agent: str
@@ -33,13 +37,17 @@ class JournalEvent(BaseModel):
 
 
 class Journal:
+    """Append-only JSONL event log — the run's source of truth."""
+
     def __init__(self, path: Path) -> None:
+        """Open (and create if needed) a journal file."""
         self._path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.touch(exist_ok=True)
 
     @property
     def path(self) -> Path:
+        """Journal file location."""
         return self._path
 
     def append(
@@ -50,6 +58,7 @@ class Journal:
         *,
         run: str | None = None,
     ) -> JournalEvent:
+        """Append one event (timestamped now) and return it."""
         event = JournalEvent(
             ts=datetime.now(UTC).isoformat(timespec="seconds"),
             run=run,
@@ -68,6 +77,7 @@ class Journal:
         agent: str | None = None,
         limit: int | None = None,
     ) -> list[JournalEvent]:
+        """Read events (optionally filtered by type/agent), newest last."""
         events: list[JournalEvent] = []
         with self._path.open("r", encoding="utf-8") as fh:
             for line in fh:
@@ -84,8 +94,10 @@ class Journal:
         return events
 
     def tail(self, n: int = 20) -> list[JournalEvent]:
+        """Return the last n events."""
         return self.read(limit=n)
 
     @staticmethod
     def render(events: list[JournalEvent]) -> str:
+        """Render events as pretty JSON (for display)."""
         return json.dumps([e.model_dump() for e in events], indent=2)

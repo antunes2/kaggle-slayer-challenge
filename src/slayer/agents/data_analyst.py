@@ -5,10 +5,14 @@ from slayer.schemas import DataAnalystOutput
 
 
 class DataAnalystAgent(Agent):
+    """Interprets the dataset profile into a DataReport and FeaturePlan."""
+
     name = "data_analyst"
     prompt_file = "data_analyst"
 
     def analyze(self, profile_md: str, competition_json: str) -> DataAnalystOutput:
+        """Produce the analysis output from a profile and the competition context."""
+
         user_message = (
             "Competition context (JSON):\n"
             f"{competition_json}\n\n"

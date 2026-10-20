@@ -1,3 +1,6 @@
+"""Slayer CLI: init, run, status, journal."""
+
+import json
 from pathlib import Path
 
 import typer
@@ -15,12 +18,13 @@ from slayer.config import (
 from slayer.kaggle import KaggleClient, KaggleError
 from slayer.llm import LLMClient, LLMError
 from slayer.loop import DataCollectionError, LoopEngine, RunContext
-from slayer.workspace import RunStatus, RunStore
+from slayer.workspace import EventType, RunStatus, RunStore
 
 app = typer.Typer(add_completion=False, help="Slayer — a team of agents that competes on Kaggle.")
 
 
 def _version_callback(value: bool) -> None:
+    """Print the version and exit when --version is passed."""
     if value:
         typer.echo(f"slayer {__version__}")
         raise typer.Exit()
@@ -40,6 +44,7 @@ def _root(
 
 
 def _mask(value: str) -> str:
+    """Mask a secret for display, showing only head/tail and length."""
     if not value:
         return "MISSING"
     if len(value) <= 8:
@@ -50,6 +55,7 @@ def _mask(value: str) -> str:
 def _llm_ping(
     api_key: str, base_url: str, timeout_s: int, max_retries: int, model: str
 ) -> tuple[bool, str]:
+    """Ping OpenRouter with a tiny request; returns (ok, detail)."""
     if not api_key:
         return False, "skipped (no API key)"
     try:
@@ -64,6 +70,7 @@ def _llm_ping(
 
 
 def _kaggle_ping(token: str) -> tuple[bool, str]:
+    """Authenticate against Kaggle and return the username; returns (ok, detail)."""
     if not token:
         return False, "skipped (no token)"
     try:
@@ -180,6 +187,9 @@ def run(
     dry_run: bool = typer.Option(
         None, "--dry-run/--live", help="Mock submissions (default from config)"
     ),
+    refresh_data: bool = typer.Option(
+        None, "--refresh-data/--use-cache", help="Force a data redownload (default from config)"
+    ),
     submissions_per_day: int = typer.Option(
         None, help="Max Kaggle submissions per day (default from config)"
     ),
@@ -196,6 +206,7 @@ def run(
             "budget_usd": budget_usd,
             "autonomy": autonomy,
             "dry_run": dry_run,
+            "refresh_data": refresh_data,
             "submissions_per_day": submissions_per_day,
         }.items()
         if value is not None
@@ -260,5 +271,74 @@ def run(
         typer.secho(f"run {final.status}: {run.run_id}", fg="yellow", bold=True)
 
 
+@app.command()
+def status(
+    run_id: str = typer.Argument(None, help="Run id — omit to list all runs"),
+    config_dir: Path = typer.Option(Path("config"), "--config-dir"),
+) -> None:
+    """Show run status: phase history, candidates, and the latest CV score."""
+    cfg = load_slayer_config(config_dir / "slayer.yaml")
+    store = RunStore(cfg.paths.runs_dir)
+    if run_id is None:
+        runs = store.list()
+        if not runs:
+            typer.echo("No runs yet — start one with: slayer run <competition>")
+            return
+        for run in runs:
+            typer.echo(f"{run.run_id}  {run.status:<8}  {run.competition}")
+        return
+    try:
+        run = store.get(run_id)
+    except KeyError as exc:
+        typer.secho(str(exc), fg="red")
+        raise typer.Exit(1) from exc
+    journal = store.journal(run)
+    phases = [e.data.get("phase") for e in journal.read(type=EventType.PHASE_ENTER)]
+    typer.secho(f"run {run.run_id}", bold=True)
+    typer.echo(f"  competition: {run.competition}")
+    typer.echo(f"  status:      {run.status}")
+    typer.echo(f"  workspace:   {run.root}")
+    if phases:
+        typer.echo(f"  phases:      {' -> '.join(str(p) for p in phases if p)}")
+    paused = journal.read(type=EventType.LOOP_PAUSED)
+    if paused:
+        typer.echo(f"  paused:      {paused[-1].data.get('reason')}")
+    records = store.registry(run).list()
+    if records:
+        by_status: dict[str, int] = {}
+        for record in records:
+            by_status[record.status] = by_status.get(record.status, 0) + 1
+        summary = ", ".join(f"{count} {name}" for name, count in sorted(by_status.items()))
+        typer.echo(f"  candidates:  {summary}")
+        scored = [r for r in records if r.cv_score is not None]
+        if scored:
+            latest = scored[-1]
+            typer.echo(f"  latest cv:   {latest.id} = {latest.cv_score} ({latest.model_type})")
+
+
+@app.command()
+def journal(
+    run_id: str = typer.Argument(..., help="Run id"),
+    limit: int = typer.Option(20, "--limit", "-l", help="Show the last N events"),
+    config_dir: Path = typer.Option(Path("config"), "--config-dir"),
+) -> None:
+    """Show the run's journal timeline (last N events)."""
+    cfg = load_slayer_config(config_dir / "slayer.yaml")
+    store = RunStore(cfg.paths.runs_dir)
+    try:
+        run = store.get(run_id)
+    except KeyError as exc:
+        typer.secho(str(exc), fg="red")
+        raise typer.Exit(1) from exc
+    events = store.journal(run).read(limit=limit)
+    if not events:
+        typer.echo("(no events)")
+        return
+    for event in events:
+        summary = json.dumps(event.data, sort_keys=True, default=str)
+        typer.echo(f"{event.ts} [{event.agent}] {event.type} {summary[:120]}")
+
+
 def main() -> None:
+    """Console script entry point."""
     app()

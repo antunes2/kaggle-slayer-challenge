@@ -177,7 +177,7 @@ def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
     assert "run created" in result.output
     assert "paused" in result.output
 
-    runs = list((tmp_path / "runs").iterdir())
+    runs = [child for child in (tmp_path / "runs").iterdir() if (child / "run.json").is_file()]
     assert len(runs) == 1
     assert (runs[0] / "workspace" / "data" / "train.csv").is_file()
     assert (runs[0] / "workspace" / "reports" / "data_report.json").is_file()

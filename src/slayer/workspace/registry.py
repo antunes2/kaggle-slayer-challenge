@@ -12,6 +12,8 @@ from slayer.workspace.journal import EventType, Journal
 
 
 class CandidateStatus:
+    """Candidate lifecycle states."""
+
     PROPOSED = "proposed"
     SCORED = "scored"
     APPROVED = "approved"
@@ -21,6 +23,8 @@ class CandidateStatus:
 
 
 class ModelCandidate(BaseModel):
+    """Input for registering a new candidate pipeline."""
+
     model_type: str
     params: dict[str, Any] = Field(default_factory=dict)
     feature_code_ref: str | None = None
@@ -29,6 +33,8 @@ class ModelCandidate(BaseModel):
 
 
 class CandidateRecord(BaseModel):
+    """Full candidate row: identity, lineage, lifecycle, and scores."""
+
     id: str
     run_id: str
     parent_id: str | None = None
@@ -69,6 +75,7 @@ class CandidateRegistry:
     def __init__(
         self, db_path: Path | str, *, run_id: str, journal: Journal | None = None
     ) -> None:
+        """Open (or create) the SQLite registry in WAL mode."""
         self._path = Path(db_path)
         self._run_id = run_id
         self._journal = journal
@@ -81,12 +88,15 @@ class CandidateRegistry:
 
     @property
     def db_path(self) -> Path:
+        """SQLite database location."""
         return self._path
 
     def close(self) -> None:
+        """Close the underlying connection."""
         self._conn.close()
 
     def add(self, candidate: ModelCandidate) -> CandidateRecord:
+        """Register a new candidate (status=proposed) and journal it."""
         record = CandidateRecord(
             id=self._next_id(),
             run_id=self._run_id,
@@ -99,6 +109,7 @@ class CandidateRegistry:
         return record
 
     def get(self, candidate_id: str) -> CandidateRecord:
+        """Fetch one candidate by id, raising KeyError if missing."""
         row = self._conn.execute(
             "SELECT * FROM candidates WHERE id=?", (candidate_id,)
         ).fetchone()
@@ -107,6 +118,7 @@ class CandidateRegistry:
         return self._to_record(row)
 
     def list(self, *, status: str | None = None) -> list[CandidateRecord]:
+        """List candidates (optionally filtered by status), oldest first."""
         if status is None:
             rows = self._conn.execute(
                 "SELECT * FROM candidates ORDER BY created_at, id"
@@ -119,6 +131,7 @@ class CandidateRegistry:
         return [self._to_record(row) for row in rows]
 
     def set_status(self, candidate_id: str, status: str) -> CandidateRecord:
+        """Move a candidate to a new lifecycle status."""
         record = self.get(candidate_id)
         self._apply_status(candidate_id, status)
         self._emit(
@@ -130,6 +143,7 @@ class CandidateRegistry:
     def record_cv(
         self, candidate_id: str, score: float, std: float | None = None
     ) -> CandidateRecord:
+        """Record a CV score for a candidate (auto-advancing it to scored)."""
         record = self.get(candidate_id)
         auto_scored = self._apply_cv(candidate_id, score, std)
         self._emit(
@@ -146,6 +160,7 @@ class CandidateRegistry:
     def record_lb(
         self, candidate_id: str, lb_score: float, submission_id: str
     ) -> CandidateRecord:
+        """Record a leaderboard score and mark the candidate submitted."""
         record = self.get(candidate_id)
         self._apply_lb(candidate_id, lb_score, submission_id)
         self._emit(
@@ -167,6 +182,7 @@ class CandidateRegistry:
         submitted_only: bool = False,
         unsubmitted_only: bool = False,
     ) -> list[CandidateRecord]:
+        """Return the top n candidates by CV score, honoring metric direction."""
         order = "DESC" if higher_is_better else "ASC"
         where = "cv_score IS NOT NULL"
         if submitted_only:
@@ -181,6 +197,7 @@ class CandidateRegistry:
         return [self._to_record(row) for row in rows]
 
     def summary_for_agent(self, n: int = 10) -> str:
+        """Render the latest candidates as a compact markdown table for LLM context."""
         records = self.list()
         if not records:
             return "No candidates registered yet."
@@ -198,6 +215,7 @@ class CandidateRegistry:
     def rebuild(
         cls, db_path: Path | str, *, run_id: str, journal: Journal
     ) -> CandidateRegistry:
+        """Rebuild a fresh registry by replaying candidate.* journal events."""
         path = Path(db_path)
         if path.exists():
             path.unlink()
@@ -215,11 +233,13 @@ class CandidateRegistry:
         return registry
 
     def _next_id(self) -> str:
+        """Generate the next sequential candidate id (cand-0001)."""
         rows = self._conn.execute("SELECT id FROM candidates").fetchall()
         nums = [int(row["id"].rsplit("-", 1)[1]) for row in rows]
         return f"cand-{max(nums, default=0) + 1:04d}"
 
     def _insert(self, record: CandidateRecord) -> None:
+        """Insert a full candidate row."""
         with self._conn:
             self._conn.execute(
                 "INSERT INTO candidates (id, run_id, parent_id, created_at, status, "
@@ -243,6 +263,7 @@ class CandidateRegistry:
             )
 
     def _apply_cv(self, candidate_id: str, score: float, std: float | None) -> bool:
+        """Store a CV score; auto-advance proposed candidates to scored."""
         record = self.get(candidate_id)
         with self._conn:
             self._conn.execute(
@@ -257,12 +278,14 @@ class CandidateRegistry:
         return record.status == CandidateStatus.PROPOSED
 
     def _apply_status(self, candidate_id: str, status: str) -> None:
+        """Set a candidate's status (no journal event)."""
         with self._conn:
             self._conn.execute(
                 "UPDATE candidates SET status=? WHERE id=?", (status, candidate_id)
             )
 
     def _apply_lb(self, candidate_id: str, lb_score: float, submission_id: str) -> None:
+        """Store a leaderboard score and mark the candidate submitted."""
         with self._conn:
             self._conn.execute(
                 "UPDATE candidates SET lb_score=?, submission_id=?, status=? WHERE id=?",
@@ -270,10 +293,12 @@ class CandidateRegistry:
             )
 
     def _to_record(self, row: sqlite3.Row) -> CandidateRecord:
+        """Convert a sqlite row into a CandidateRecord."""
         data = dict(row)
         data["params"] = json.loads(data.pop("params_json") or "{}")
         return CandidateRecord.model_validate(data)
 
     def _emit(self, type: str, data: dict[str, Any]) -> None:
+        """Journal a registry mutation (when a journal is attached)."""
         if self._journal is not None:
             self._journal.append(agent="system", type=type, data=data, run=self._run_id)

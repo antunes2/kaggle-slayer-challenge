@@ -13,6 +13,8 @@ Handler = Callable[["RunContext"], None]
 
 
 class Phase(StrEnum):
+    """Loop phases in execution order (post-C0002)."""
+
     INIT = "init"
     DATA_COLLECTION = "data_collection"
     ANALYSIS = "analysis"
@@ -39,6 +41,8 @@ PHASE_ORDER: tuple[Phase, ...] = (
 
 @dataclass
 class RunContext:
+    """Live handles for one loop execution: run, journal, registry, clients."""
+
     run: Run
     journal: Journal
     registry: CandidateRegistry
@@ -49,11 +53,13 @@ class RunContext:
     agent_configs: AgentsConfig | None = None
 
     def say(self, message: str) -> None:
+        """Stream a progress line to the reporter (if attached)."""
         if self.reporter is not None:
             self.reporter(message)
 
 
 def _default_handlers() -> dict[Phase, Handler]:
+    """Resolve the default phase handlers (lazy import to avoid cycles)."""
     from slayer.loop.phases import HANDLERS
 
     return dict(HANDLERS)
@@ -63,12 +69,14 @@ class LoopEngine:
     def __init__(
         self, ctx: RunContext, handlers: Mapping[Phase, Handler] | None = None
     ) -> None:
+        """Wire the engine to a run context and (optionally) custom handlers."""
         self._ctx = ctx
         self._handlers: dict[Phase, Handler] = (
             dict(handlers) if handlers is not None else _default_handlers()
         )
 
     def start(self) -> Run:
+        """Execute phases in order until pause, failure, or completion."""
         self._ctx.run = self._ctx.store.update_status(self._ctx.run, RunStatus.ACTIVE)
         for phase in PHASE_ORDER:
             handler = self._handlers.get(phase)
@@ -90,6 +98,7 @@ class LoopEngine:
         return self._ctx.store.update_status(self._ctx.run, RunStatus.FINISHED)
 
     def _pause(self, reason: str) -> Run:
+        """Pause the run at the first unimplemented phase."""
         self._ctx.say(f"[pause] {reason}")
         self._ctx.journal.append(
             agent="loop",
@@ -100,5 +109,6 @@ class LoopEngine:
         return self._ctx.store.update_status(self._ctx.run, RunStatus.PAUSED)
 
     def _fail(self, exc: Exception) -> None:
+        """Mark the run failed after a phase handler exception."""
         self._ctx.say(f"[fail] {exc}")
         self._ctx.run = self._ctx.store.update_status(self._ctx.run, RunStatus.FAILED)

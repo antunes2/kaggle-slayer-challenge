@@ -10,6 +10,7 @@ from slayer.workspace import EventType
 
 
 def init_phase(ctx: RunContext) -> None:
+    """INIT: resolve the competition, probe data access, and store its context."""
     info = ctx.kaggle.find_competition(ctx.run.competition)
     files = ctx.kaggle.list_files(ctx.run.competition)
     report_path = ctx.run.workspace("reports") / "competition.json"
@@ -35,6 +36,7 @@ def init_phase(ctx: RunContext) -> None:
 
 
 def analysis_phase(ctx: RunContext) -> None:
+    """ANALYSIS: run the profiler, then the data analyst agent over its output."""
     if ctx.llm is None or ctx.agent_configs is None:
         raise AnalysisError("analysis requires the LLM client — check OPENROUTER_API_KEY")
     profile = profile_data(ctx.run)

@@ -11,10 +11,13 @@ from slayer.workspace import Run
 
 
 class AnalysisError(Exception):
+    """Raised when the dataset cannot be profiled."""
+
     pass
 
 
 def _find_csv(data_dir: Path, patterns: tuple[str, ...]) -> Path | None:
+    """Locate a CSV by trying each glob pattern in order."""
     for pattern in patterns:
         matches = sorted(data_dir.glob(pattern))
         if matches:
@@ -23,6 +26,7 @@ def _find_csv(data_dir: Path, patterns: tuple[str, ...]) -> Path | None:
 
 
 def _fmt(value) -> str:
+    """Format a statistic compactly ('-' for NaN)."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return "-"
     if isinstance(value, float):
@@ -31,12 +35,14 @@ def _fmt(value) -> str:
 
 
 def _clean_corr(value) -> float:
+    """Round a correlation, treating NaN as zero."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return 0.0
     return round(float(value), 4)
 
 
 def profile_data(run: Run) -> DatasetProfile:
+    """Compute the dataset profile and write eda/profile.{json,md}."""
     data_dir = run.workspace("data")
     train_path = _find_csv(data_dir, ("train.csv", "train*.csv"))
     test_path = _find_csv(data_dir, ("test.csv", "test*.csv"))

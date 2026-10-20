@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v1.0 (Phase 2 step 2.1: CV harness implemented, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
+> **Status:** v1.1 (Phase 2 step 2.1b: data cache + observability, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -275,7 +275,7 @@ runs/                      # run artifacts (gitignored)
 | **2. Baseline & first submission (mocked)** | PLANNING → BASELINE → REVIEW → SUBMIT | CV harness; planner `StrategyPlan`; researcher pipeline codegen; reviewer gate; `SubmissionSink` abstraction (**MockSink** for MVP); submission approval flow | End-to-end pipeline completes with submission recorded via MockSink; approval + quota logic exercised; zero real quota spent | 🔶 |
 | **2b. First live submission** | go live | flip to `KaggleSink`; same pipeline against a Playground Series comp | Real submission accepted by Kaggle; score recorded in journal | ⬜ |
 | **3. Iteration engine** | the heart | experiment loop; candidate registry (experiments.db); quota-aware submit policy; CV/LB tracking; feedback from LB → planner | ≥5 sequential iterations with measurable CV improvement; no quota violations | ⬜ |
-| **4. Monitoring & resilience** | MONITOR + ops | leaderboard monitoring; deadline awareness; pause/resume checkpoints; budget enforcement; `status`/`journal`/`leaderboard` commands | 24h unattended run on a playground comp without incident | ⬜ |
+| **4. Monitoring & resilience** | MONITOR + ops | leaderboard monitoring; deadline awareness; pause/resume checkpoints; budget enforcement; `leaderboard` command | 24h unattended run on a playground comp without incident | ⬜ |
 | **5. Autonomy & polish** | UX depth | daemon + `attach`; `slayer chat` REPL; richer live view; agentic orchestrator upgrade (dynamic replanning); cost report | User can steer a live run via chat; top-20% achieved on target comp | ⬜ |
 
 Phases 0–2 form the **MVP slice**: every architectural piece exists but shallow (all
@@ -303,6 +303,7 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | Step | Scope | Status |
 |------|-------|--------|
 | 2.1 | CV harness (fixed skeleton, generated plugin) + sandbox runner + metric registry + `CVResult` | ✅ ([design](designs/06-cv-harness.md)) |
+| 2.1b | Ops polish pulled forward from the Phase 1 review: per-competition data cache (skip re-downloads), `slayer status`/`slayer journal` commands, docstring backfill across src | ✅ |
 | 2.2 | PLANNING: planner agent → `StrategyPlan` (problem type, CV protocol, roadmap, submission policy) | ⬜ |
 | 2.3 | BASELINE: researcher agent pipeline codegen + registry wiring → first scored candidate | ⬜ |
 | 2.4 | REVIEW + SUBMIT (mock): reviewer gate, `SubmissionSink` (MockSink), approve-first flow | ⬜ |

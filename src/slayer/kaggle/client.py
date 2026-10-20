@@ -8,6 +8,8 @@ from pydantic import BaseModel
 
 
 class KaggleError(Exception):
+    """Raised for any Kaggle API failure surfaced to the loop."""
+
     pass
 
 
@@ -49,12 +51,14 @@ class LeaderboardEntry(BaseModel):
 
 
 def _text(value: Any) -> str | None:
+    """Stringify a value, keeping None as None."""
     if value is None:
         return None
     return str(value)
 
 
 def _reward_text(reward: Any) -> str | None:
+    """Render a kagglesdk Reward object as text like '50000 USD'."""
     if reward is None:
         return None
     quantity = getattr(reward, "quantity", None)
@@ -65,12 +69,14 @@ def _reward_text(reward: Any) -> str | None:
 
 
 def _default_api_class() -> Any:
+    """Lazily import the kaggle package API class (avoids import side effects)."""
     from kaggle.api.kaggle_api_extended import KaggleApi
 
     return KaggleApi
 
 
 def _build_default_api(token: str) -> Any:
+    """Authenticate a real kaggle API instance with the given access token."""
     os.environ["KAGGLE_API_TOKEN"] = token
     api_class = _default_api_class()
     api = api_class()
@@ -82,16 +88,21 @@ def _build_default_api(token: str) -> Any:
 
 
 class KaggleClient:
+    """Thin, defensively-converted wrapper over the kaggle package API."""
+
     def __init__(self, api: Any) -> None:
+        """Wrap an (injected or real) kaggle API instance."""
         self._api = api
 
     @classmethod
     def from_token(cls, token: str) -> KaggleClient:
+        """Build an authenticated client from a Kaggle access token."""
         if not token:
             raise KaggleError("Kaggle API token is empty")
         return cls(_build_default_api(token))
 
     def ping(self) -> str:
+        """Return the authenticated username (auth verified at construction)."""
         config = dict(getattr(self._api, "config_values", None) or {})
         username = config.get("username")
         if not username:
@@ -106,6 +117,7 @@ class KaggleClient:
         sort_by: str | None = None,
         page_size: int = 20,
     ) -> list[CompetitionInfo]:
+        """List competitions matching search/category/sort filters."""
         response = self._api.competitions_list(
             search=search, category=category, sort_by=sort_by, page_size=page_size
         )
@@ -114,6 +126,7 @@ class KaggleClient:
 
     @staticmethod
     def _normalize_ref(raw: Any) -> str:
+        """Reduce a ref or full competition URL to the bare ref name."""
         text = str(raw or "").rstrip("/")
         if "/" in text:
             return text.rsplit("/", 1)[-1]
@@ -127,6 +140,7 @@ class KaggleClient:
         max_pages: int = 5,
         page_size: int = 100,
     ) -> CompetitionInfo:
+        """Find one competition by exact ref, paginating with a search fallback."""
         page_token: str | None = None
         for _ in range(max_pages):
             response = self._api.competitions_list(
@@ -155,6 +169,7 @@ class KaggleClient:
         )
 
     def _to_competition(self, competition: Any) -> CompetitionInfo:
+        """Convert a raw sdk competition object into our pydantic model."""
         return CompetitionInfo(
             ref=self._normalize_ref(getattr(competition, "ref", "")),
             title=_text(getattr(competition, "title", None)),
@@ -167,6 +182,7 @@ class KaggleClient:
         )
 
     def list_files(self, competition: str) -> list[CompetitionFileInfo]:
+        """List a competition's data files (also used as a rules probe)."""
         response = self._api.competition_list_files(competition)
         files = list(getattr(response, "files", None) or [])
         return [
@@ -179,6 +195,7 @@ class KaggleClient:
         ]
 
     def download_files(self, competition: str, target_dir: Path, *, force: bool = False) -> Path:
+        """Download all competition data into target_dir; returns the zip path."""
         target_dir.mkdir(parents=True, exist_ok=True)
         try:
             self._api.competition_download_files(
@@ -198,6 +215,7 @@ class KaggleClient:
         return zip_path
 
     def submit(self, competition: str, file_path: Path, message: str = "") -> SubmissionRef:
+        """Submit a predictions file to the competition."""
         if not file_path.exists():
             raise KaggleError(f"submission file not found: {file_path}")
         response = self._api.competition_submit(str(file_path), message, competition, quiet=True)
@@ -205,6 +223,7 @@ class KaggleClient:
         return SubmissionRef(id=str(ref or ""), message=_text(getattr(response, "message", None)))
 
     def submissions(self, competition: str) -> list[SubmissionInfo]:
+        """List the user's submissions with status and scores."""
         items = self._api.competition_submissions(competition) or []
         infos: list[SubmissionInfo] = []
         for item in items:
@@ -226,6 +245,7 @@ class KaggleClient:
         return infos
 
     def leaderboard(self, competition: str, page_size: int = 50) -> list[LeaderboardEntry]:
+        """View the current leaderboard, ranked by enumeration."""
         items = self._api.competition_leaderboard_view(competition, page_size=page_size) or []
         entries: list[LeaderboardEntry] = []
         for item in items:
