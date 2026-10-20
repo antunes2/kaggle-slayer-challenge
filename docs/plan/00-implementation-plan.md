@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v0.7 (Phase 0 complete) · **Updated:** 2026-10-19 · **Owner:** Gabriel
+> **Status:** v0.8 (Phase 1 step 1.1: loop engine + data collection, in review) · **Updated:** 2026-10-19 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -79,24 +79,25 @@ only when you want to.*
 
 ### 5.2 The orchestration loop
 
-Deterministic phase gates, LLM-driven content within each phase:
+Deterministic phase gates, LLM-driven content within each phase.
+Phase order per [C0002](changes/C0002-loop-phase-reorder.md) — planning happens
+**after** EDA so the planner sees the DataReport:
 
 ```
-INIT ──► PLANNING ──► DATA_COLLECTION ──► ANALYSIS ──► BASELINE ──► ITERATE ◄─┐
-                ▲            (download)      (EDA)      (first CV)     │      │
-                │                                                          │      │
-                │                REVIEW ──► SUBMIT ──► MONITOR ──────────┘      │
-                └────────────────────────────────────────────────────── (until: target %
-                                                                            reached, deadline,
-                                                                            or budget out)
+INIT ──► DATA_COLLECTION ──► ANALYSIS ──► PLANNING ──► BASELINE ──► ITERATE ◄───┐
+            (download)         (EDA)      (strategy)   (first CV)     │         │
+                                                                     ▼         │
+                                                          REVIEW ─► SUBMIT ─► MONITOR
+                                                                     (until: target % reached,
+                                                                      deadline, or budget out)
 ```
 
 Loop responsibilities per phase:
 
-1. **INIT** — create run + workspace, fetch competition metadata (description, metric, deadline, quota), confirm with user if interactive.
-2. **PLANNING** — planner agent reads comp metadata → `StrategyPlan` (schema-validated): problem type, metric, CV strategy, modelling roadmap, submission policy.
-3. **DATA_COLLECTION** — download competition data via Kaggle API, verify checksums/shape, write manifest.
-4. **ANALYSIS** — data analyst writes & runs EDA code → `DataReport` + `FeaturePlan` (schema-validated).
+1. **INIT** — create run + workspace, fetch competition metadata (title, metric, deadline, quota), write `reports/competition.json`.
+2. **DATA_COLLECTION** — download competition data via Kaggle API, safe-unzip, write sha256 manifest.
+3. **ANALYSIS** — data analyst writes & runs EDA code → `DataReport` + `FeaturePlan` (schema-validated).
+4. **PLANNING** — planner agent reads comp metadata **+ DataReport** → `StrategyPlan` (schema-validated): problem type, metric, CV protocol, modelling roadmap, submission policy.
 5. **BASELINE** — ML researcher writes a minimal pipeline + CV harness → first `Candidate` with local CV score.
 6. **ITERATE** — researcher proposes experiments (features, models, tuning, ensembling); each runs locally through the standard CV harness; results tracked.
 7. **REVIEW** — reviewer agent inspects best candidate(s) for leakage, CV/LB mismatch risk, quota value → `ReviewVerdict` (approve / reject / revise).
@@ -270,8 +271,8 @@ runs/                      # run artifacts (gitignored)
 | Phase | Scope | Key deliverables | Acceptance criteria | Status |
 |-------|-------|------------------|---------------------|--------|
 | **0. Foundation** | infra only | config loading; OpenRouter client w/ JSON mode + cost tracking; KaggleClient wrapper; journal + run store; `slayer init` | `slayer init` pings both APIs green; journal round-trip unit-tested | ✅ |
-| **1. Data collection** | INIT → DATA_COLLECTION | run/workspace scaffolding; `slayer run <comp>`; download + manifest; data analyst EDA → `DataReport` | Real comp: data on disk, human-readable EDA report in `reports/` | ⬜ |
-| **2. Baseline & first submission (mocked)** | PLANNING → ANALYSIS → BASELINE → REVIEW → SUBMIT | planner `StrategyPlan`; CV harness; researcher baseline codegen; reviewer gate; `SubmissionSink` abstraction (**MockSink** for MVP); submission approval flow | End-to-end pipeline completes with submission recorded via MockSink; approval + quota logic exercised; zero real quota spent | ⬜ |
+| **1. Data collection & EDA** | INIT → DATA_COLLECTION → ANALYSIS | loop engine + `slayer run <comp>`; download + safe unzip + manifest; data analyst EDA → `DataReport` | Real comp: data on disk, human-readable EDA report in `reports/` | 🔶 |
+| **2. Baseline & first submission (mocked)** | PLANNING → BASELINE → REVIEW → SUBMIT | planner `StrategyPlan`; CV harness; researcher baseline codegen; reviewer gate; `SubmissionSink` abstraction (**MockSink** for MVP); submission approval flow | End-to-end pipeline completes with submission recorded via MockSink; approval + quota logic exercised; zero real quota spent | ⬜ |
 | **2b. First live submission** | go live | flip to `KaggleSink`; same pipeline against a Playground Series comp | Real submission accepted by Kaggle; score recorded in journal | ⬜ |
 | **3. Iteration engine** | the heart | experiment loop; candidate registry (experiments.db); quota-aware submit policy; CV/LB tracking; feedback from LB → planner | ≥5 sequential iterations with measurable CV improvement; no quota violations | ⬜ |
 | **4. Monitoring & resilience** | MONITOR + ops | leaderboard monitoring; deadline awareness; pause/resume checkpoints; budget enforcement; `status`/`journal`/`leaderboard` commands | 24h unattended run on a playground comp without incident | ⬜ |
@@ -289,6 +290,13 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | 0.3 | Journal (JSONL) + run store + candidate registry (SQLite, per D0005) | ✅ ([design](designs/02-journal-and-registry.md)) |
 | 0.4 | KaggleClient wrapper + quota manager + `slayer init` Kaggle ping | ✅ ([design](designs/03-kaggle-client.md)) |
 | 0.5 | Phase 0 acceptance: `slayer init` green end-to-end; unit tests green | ✅ |
+
+**Phase 1 step breakdown** (order per [C0002](changes/C0002-loop-phase-reorder.md)):
+
+| Step | Scope | Status |
+|------|-------|--------|
+| 1.1 | Loop engine (phase machine, pause/fail semantics) + `slayer run` command + INIT (competition context) + DATA_COLLECTION (download, safe unzip, sha256 manifest) | 🔶 |
+| 1.2 | ANALYSIS: data analyst agent — sandboxed EDA execution → `DataReport` | ⬜ |
 
 ## 12. Testing Strategy
 

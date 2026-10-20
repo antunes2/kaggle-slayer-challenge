@@ -27,3 +27,4 @@ Which sections of `00-implementation-plan.md` were updated, and which ADRs
 ## Index
 
 - [C0001 — Workflow change: no commit before user review](C0001-no-commit-before-review.md)
+- [C0002 — Loop phase order: PLANNING moves after ANALYSIS](C0002-loop-phase-reorder.md)

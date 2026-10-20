@@ -112,9 +112,51 @@ class KaggleClient:
         competitions = list(getattr(response, "competitions", None) or [])
         return [self._to_competition(c) for c in competitions if c is not None]
 
+    @staticmethod
+    def _normalize_ref(raw: Any) -> str:
+        text = str(raw or "").rstrip("/")
+        if "/" in text:
+            return text.rsplit("/", 1)[-1]
+        return text
+
+    def find_competition(
+        self,
+        ref: str,
+        *,
+        search: str | None = None,
+        max_pages: int = 5,
+        page_size: int = 100,
+    ) -> CompetitionInfo:
+        page_token: str | None = None
+        for _ in range(max_pages):
+            response = self._api.competitions_list(
+                search=search, page_size=page_size, page_token=page_token
+            )
+            competitions = list(getattr(response, "competitions", None) or [])
+            for competition in competitions:
+                if competition is not None and self._normalize_ref(
+                    getattr(competition, "ref", "")
+                ) == ref:
+                    return self._to_competition(competition)
+            page_token = getattr(response, "next_page_token", "") or None
+            if not page_token:
+                break
+        if search is None:
+            response = self._api.competitions_list(search=ref, page_size=page_size)
+            competitions = list(getattr(response, "competitions", None) or [])
+            for competition in competitions:
+                if competition is not None and self._normalize_ref(
+                    getattr(competition, "ref", "")
+                ) == ref:
+                    return self._to_competition(competition)
+        raise KaggleError(
+            f"competition not found on Kaggle: '{ref}' — check the ref, e.g. "
+            "'playground-series-s5e10'"
+        )
+
     def _to_competition(self, competition: Any) -> CompetitionInfo:
         return CompetitionInfo(
-            ref=str(getattr(competition, "ref", "")),
+            ref=self._normalize_ref(getattr(competition, "ref", "")),
             title=_text(getattr(competition, "title", None)),
             category=_text(getattr(competition, "category", None)),
             reward=_reward_text(getattr(competition, "reward", None)),
@@ -138,9 +180,18 @@ class KaggleClient:
 
     def download_files(self, competition: str, target_dir: Path, *, force: bool = False) -> Path:
         target_dir.mkdir(parents=True, exist_ok=True)
-        self._api.competition_download_files(
-            competition, path=str(target_dir), force=force, quiet=True
-        )
+        try:
+            self._api.competition_download_files(
+                competition, path=str(target_dir), force=force, quiet=True
+            )
+        except Exception as exc:
+            message = f"data download failed: {exc}"
+            if "403" in str(exc) or "401" in str(exc):
+                message += (
+                    " — you likely need to accept the competition rules first: "
+                    f"https://www.kaggle.com/competitions/{competition}/rules"
+                )
+            raise KaggleError(message) from exc
         zip_path = target_dir / f"{competition}.zip"
         if not zip_path.exists():
             raise KaggleError(f"expected {zip_path} after download, not found")

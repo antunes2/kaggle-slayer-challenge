@@ -6,12 +6,15 @@ from slayer._version import __version__
 from slayer.config import (
     AGENT_NAMES,
     DEFAULT_MODEL,
+    DefaultsConfig,
     load_agents_config,
     load_secrets,
     load_slayer_config,
 )
 from slayer.kaggle import KaggleClient, KaggleError
 from slayer.llm import LLMClient, LLMError
+from slayer.loop import DataCollectionError, LoopEngine, RunContext
+from slayer.workspace import RunStatus, RunStore
 
 app = typer.Typer(add_completion=False, help="Slayer — a team of agents that competes on Kaggle.")
 
@@ -162,6 +165,82 @@ def init(
     else:
         typer.secho("Environment NOT ready — fix the items above.", fg="red", bold=True)
         raise typer.Exit(1)
+
+
+@app.command()
+def run(
+    competition: str = typer.Argument(
+        ..., help="Kaggle competition ref, e.g. playground-series-s5e10"
+    ),
+    config_dir: Path = typer.Option(Path("config"), "--config-dir"),
+    env_file: Path = typer.Option(Path(".env"), "--env-file"),
+    budget_usd: float = typer.Option(None, help="LLM spend cap for this run (default from config)"),
+    autonomy: str = typer.Option(None, help="approve-first | agentic (default from config)"),
+    dry_run: bool = typer.Option(
+        None, "--dry-run/--live", help="Mock submissions (default from config)"
+    ),
+    submissions_per_day: int = typer.Option(
+        None, help="Max Kaggle submissions per day (default from config)"
+    ),
+) -> None:
+    """Start the orchestration loop on a competition."""
+    try:
+        cfg = load_slayer_config(config_dir / "slayer.yaml")
+    except Exception as exc:
+        typer.secho(f"invalid slayer config: {exc}", fg="red")
+        raise typer.Exit(1) from exc
+    overrides = {
+        key: value
+        for key, value in {
+            "budget_usd": budget_usd,
+            "autonomy": autonomy,
+            "dry_run": dry_run,
+            "submissions_per_day": submissions_per_day,
+        }.items()
+        if value is not None
+    }
+    try:
+        defaults = DefaultsConfig(**{**cfg.defaults.model_dump(), **overrides})
+    except Exception as exc:
+        typer.secho(f"invalid option combination: {exc}", fg="red")
+        raise typer.Exit(1) from exc
+
+    secrets = load_secrets(env_file)
+    if not secrets.kaggle_api_token:
+        typer.secho("KAGGLE_API_TOKEN missing — cannot run without Kaggle access.", fg="red")
+        raise typer.Exit(1)
+    try:
+        kaggle = KaggleClient.from_token(secrets.kaggle_api_token)
+    except KaggleError as exc:
+        typer.secho(f"kaggle authentication failed: {exc}", fg="red")
+        raise typer.Exit(1) from exc
+
+    store = RunStore(cfg.paths.runs_dir)
+    run = store.create(competition, defaults)
+    typer.secho(f"run created: {run.run_id}", bold=True)
+    typer.echo(f"  workspace: {run.root}")
+
+    ctx = RunContext(
+        run=run,
+        journal=store.journal(run),
+        registry=store.registry(run),
+        kaggle=kaggle,
+        store=store,
+        reporter=lambda message: typer.echo(f"  {message}"),
+    )
+    try:
+        final = LoopEngine(ctx).start()
+    except (KaggleError, DataCollectionError) as exc:
+        typer.secho(f"run failed: {exc}", fg="red", bold=True)
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        typer.secho(f"run failed unexpectedly: {exc}", fg="red", bold=True)
+        typer.echo(f"details: {run.root / 'journal.jsonl'}")
+        raise typer.Exit(1) from exc
+    if final.status == RunStatus.FINISHED:
+        typer.secho(f"run finished: {run.run_id}", fg="green", bold=True)
+    else:
+        typer.secho(f"run {final.status}: {run.run_id}", fg="yellow", bold=True)
 
 
 def main() -> None:
