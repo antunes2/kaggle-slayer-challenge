@@ -5,11 +5,19 @@ from slayer.schemas.analysis import (
     FeaturePlan,
     ProblemType,
 )
+from slayer.schemas.cv import CVProtocol, CVResult, FoldScore
+from slayer.schemas.strategy import CVSettings, RoadmapStep, StrategyPlan
 
 __all__ = [
+    "CVProtocol",
+    "CVResult",
+    "CVSettings",
     "DataAnalystOutput",
     "DataReport",
     "FeatureIdea",
     "FeaturePlan",
+    "FoldScore",
     "ProblemType",
+    "RoadmapStep",
+    "StrategyPlan",
 ]

@@ -123,14 +123,17 @@ class _FakeRunKaggle:
 
 
 class _FakeLLM:
+    """Fake LLM that dispatches canned outputs by response model."""
+
     def __init__(self, api_key: str = "", **kwargs) -> None:
         pass
 
-    def complete_structured(self, messages, model, response_model, **kwargs):
-        from slayer.llm import LLMResponse
+    @staticmethod
+    def _analyst_output():
+        """Canned data analyst output."""
         from slayer.schemas import DataAnalystOutput, DataReport, FeatureIdea, FeaturePlan
 
-        output = DataAnalystOutput(
+        return DataAnalystOutput(
             report=DataReport(
                 problem_type="binary_classification",
                 target_column="target",
@@ -147,7 +150,39 @@ class _FakeLLM:
                 ]
             ),
         )
-        return LLMResponse(content="{}", model=model), output
+
+    @staticmethod
+    def _strategy_plan():
+        """Canned strategy plan."""
+        from slayer.schemas import CVSettings, RoadmapStep, StrategyPlan
+
+        return StrategyPlan(
+            problem_type="binary_classification",
+            target_column="target",
+            cv=CVSettings(k_folds=2, seed=1, stratified=True),
+            roadmap=[
+                RoadmapStep(
+                    title="Baseline",
+                    description="lightgbm raw",
+                    model_family="lightgbm",
+                    priority=1,
+                )
+            ],
+            min_cv_improvement=0.0005,
+            guidance=["stratified"],
+            summary="ok",
+        )
+
+    def complete_structured(self, messages, model, response_model, **kwargs):
+        """Return the canned output matching the requested model."""
+        from slayer.llm import LLMResponse
+        from slayer.schemas import DataAnalystOutput, StrategyPlan
+
+        canned = {
+            DataAnalystOutput: self._analyst_output(),
+            StrategyPlan: self._strategy_plan(),
+        }[response_model]
+        return LLMResponse(content="{}", model=model), canned
 
 
 def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
@@ -181,6 +216,7 @@ def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
     assert len(runs) == 1
     assert (runs[0] / "workspace" / "data" / "train.csv").is_file()
     assert (runs[0] / "workspace" / "reports" / "data_report.json").is_file()
+    assert (runs[0] / "workspace" / "reports" / "strategy_plan.json").is_file()
     assert (runs[0] / "journal.jsonl").is_file()
 
 

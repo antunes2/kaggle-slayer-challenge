@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v1.1 (Phase 2 step 2.1b: data cache + observability, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
+> **Status:** v1.2 (Phase 2 step 2.2: planner implemented + live-validated, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -304,7 +304,7 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 |------|-------|--------|
 | 2.1 | CV harness (fixed skeleton, generated plugin) + sandbox runner + metric registry + `CVResult` | ✅ ([design](designs/06-cv-harness.md)) |
 | 2.1b | Ops polish pulled forward from the Phase 1 review: per-competition data cache (skip re-downloads), `slayer status`/`slayer journal` commands, docstring backfill across src | ✅ |
-| 2.2 | PLANNING: planner agent → `StrategyPlan` (problem type, CV protocol, roadmap, submission policy) | ⬜ |
+| 2.2 | PLANNING: planner agent → `StrategyPlan` (problem type, CV protocol, roadmap, submission policy) | ✅ ([design](designs/07-planner.md)) |
 | 2.3 | BASELINE: researcher agent pipeline codegen + registry wiring → first scored candidate | ⬜ |
 | 2.4 | REVIEW + SUBMIT (mock): reviewer gate, `SubmissionSink` (MockSink), approve-first flow | ⬜ |
 

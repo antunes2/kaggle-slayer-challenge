@@ -15,6 +15,9 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+from slayer.schemas.cv import CVProtocol
+from slayer.schemas.strategy import CVSettings
+
 
 @dataclass(frozen=True)
 class ResolvedMetric:
@@ -111,4 +114,16 @@ def resolve_metric(raw: str) -> ResolvedMetric:
     raise MetricError(
         f"unsupported metric '{raw}' (normalized: '{key}'). "
         f"Supported: {sorted(_REGISTRY)}"
+    )
+
+
+def build_cv_protocol(evaluation_metric: str, cv: CVSettings) -> CVProtocol:
+    """Merge the planner's CV shape with the competition metric (direction resolved)."""
+    resolved = resolve_metric(evaluation_metric)
+    return CVProtocol(
+        metric=evaluation_metric,
+        k_folds=cv.k_folds,
+        seed=cv.seed,
+        stratified=cv.stratified,
+        higher_is_better=resolved.higher_is_better,
     )
