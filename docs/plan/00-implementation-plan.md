@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v1.5 (C0003 re-sequencing; Phase 3 step 3.1 iteration engine, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
+> **Status:** v1.6 (Phase 3 steps 3.1–3.2: iteration engine + resume, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -313,7 +313,7 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | Step | Scope | Status |
 |------|-------|--------|
 | 3.1 | Iteration engine core: per-roadmap-step propose → evaluate → review → submit loop, repair-retry on failed candidates with error feedback, LLM budget enforcement | ✅ ([design](designs/10-iteration-engine.md); live loop validation pending user go-ahead) |
-| 3.2 | `slayer resume <run>`: resume paused/failed runs without redoing completed phases (registry-driven skip logic) | ⬜ |
+| 3.2 | `slayer resume <run>`: resume paused/failed runs without redoing completed phases (registry-driven skip logic) | ✅ ([design](designs/11-resume.md)) |
 | 3.3 | Harness timeout handling per [Q0002](questions/Q0002-harness-timeout-handling.md): configurable budget, budget-aware researcher prompt, probe fold + incremental fold reporting | ⬜ |
 
 ## 12. Testing Strategy

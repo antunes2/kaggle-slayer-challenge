@@ -220,6 +220,39 @@ def run(
         raise typer.Exit(1) from exc
 
     secrets = load_secrets(env_file)
+    if not secrets.kaggle_api_token or not secrets.openrouter_api_key:
+        typer.secho("KAGGLE_API_TOKEN or OPENROUTER_API_KEY missing — check your env.", fg="red")
+        raise typer.Exit(1)
+
+    store = RunStore(cfg.paths.runs_dir)
+    run = store.create(competition, defaults)
+    typer.secho(f"run created: {run.run_id}", bold=True)
+    typer.echo(f"  workspace: {run.root}")
+    _execute_run(config_dir=config_dir, env_file=env_file, run=run)
+
+
+@app.command()
+def resume(
+    run_id: str = typer.Argument(..., help="Run id to resume"),
+    config_dir: Path = typer.Option(Path("config"), "--config-dir"),
+    env_file: Path = typer.Option(Path(".env"), "--env-file"),
+) -> None:
+    """Resume a paused or failed run, skipping completed phases."""
+    cfg = load_slayer_config(config_dir / "slayer.yaml")
+    store = RunStore(cfg.paths.runs_dir)
+    try:
+        run = store.get(run_id)
+    except KeyError as exc:
+        typer.secho(str(exc), fg="red")
+        raise typer.Exit(1) from exc
+    typer.secho(f"resuming run {run.run_id} (status: {run.status})", bold=True)
+    _execute_run(config_dir=config_dir, env_file=env_file, run=run)
+
+
+def _execute_run(config_dir: Path, env_file: Path, run) -> None:
+    """Build all clients for an existing run and execute the loop to completion."""
+    cfg = load_slayer_config(config_dir / "slayer.yaml")
+    secrets = load_secrets(env_file)
     if not secrets.kaggle_api_token:
         typer.secho("KAGGLE_API_TOKEN missing — cannot run without Kaggle access.", fg="red")
         raise typer.Exit(1)
@@ -242,12 +275,7 @@ def run(
         timeout_s=cfg.llm.timeout_s,
         max_retries=cfg.llm.max_retries,
     )
-
     store = RunStore(cfg.paths.runs_dir)
-    run = store.create(competition, defaults)
-    typer.secho(f"run created: {run.run_id}", bold=True)
-    typer.echo(f"  workspace: {run.root}")
-
     ctx = RunContext(
         run=run,
         journal=store.journal(run),

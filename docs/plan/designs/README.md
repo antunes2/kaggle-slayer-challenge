@@ -20,3 +20,4 @@ errors, finish with a short **Retro** section — the doc stays true, not aspira
 - [08 — BASELINE: Researcher Codegen → First Scored Candidate](08-researcher-and-baseline.md)
 - [09 — REVIEW & SUBMIT: Reviewer Gate + Submission Sinks (Mock-first)](09-review-and-submission.md)
 - [10 — ITERATION: The Improvement Loop](10-iteration-engine.md)
+- [11 — RESUME: Continue Without Redoing](11-resume.md)

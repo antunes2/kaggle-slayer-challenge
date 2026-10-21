@@ -279,4 +279,4 @@ def test_run_command_requires_kaggle_token(tmp_path, monkeypatch) -> None:
         ["run", "comp-x", "--config-dir", str(config_dir), "--env-file", str(tmp_path / "no.env")],
     )
     assert result.exit_code == 1
-    assert "KAGGLE_API_TOKEN missing" in result.output
+    assert "KAGGLE_API_TOKEN or OPENROUTER_API_KEY missing" in result.output

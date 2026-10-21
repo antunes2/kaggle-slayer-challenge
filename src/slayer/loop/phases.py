@@ -44,6 +44,12 @@ def analysis_phase(ctx: RunContext) -> None:
     """ANALYSIS: run the profiler, then the data analyst agent over its output."""
     if ctx.llm is None or ctx.agent_configs is None:
         raise AnalysisError("analysis requires the LLM client — check OPENROUTER_API_KEY")
+    reports_dir = ctx.run.workspace("reports")
+    if (reports_dir / "data_report.json").exists() and (
+        reports_dir / "feature_plan.json"
+    ).exists():
+        ctx.say("  analysis artifacts exist — skipping")
+        return
     profile = profile_data(ctx.run)
     ctx.say(
         f"  profiled train {profile.train_rows:,}x{profile.train_cols}, "
@@ -93,6 +99,9 @@ def planning_phase(ctx: RunContext) -> None:
     if ctx.llm is None or ctx.agent_configs is None:
         raise AnalysisError("planning requires the LLM client — check OPENROUTER_API_KEY")
     reports_dir = ctx.run.workspace("reports")
+    if (reports_dir / "strategy_plan.json").exists():
+        ctx.say("  strategy plan exists — skipping")
+        return
     competition_json = (reports_dir / "competition.json").read_text(encoding="utf-8")
     data_report_json = (reports_dir / "data_report.json").read_text(encoding="utf-8")
     feature_plan_json = (reports_dir / "feature_plan.json").read_text(encoding="utf-8")
@@ -193,6 +202,14 @@ def baseline_phase(ctx: RunContext) -> None:
 
     plan = StrategyPlan.model_validate_json(strategy_json)
     step = sorted(plan.roadmap, key=lambda s: s.priority)[0]
+    existing = [
+        r
+        for r in ctx.registry.list()
+        if r.params.get("roadmap_step") == step.title and r.status != "failed"
+    ]
+    if existing:
+        ctx.say(f"  baseline for '{step.title}' already exists ({existing[0].id}) — skipping")
+        return
     evaluation_metric = json.loads(competition_json).get("evaluation_metric") or ""
     protocol = build_cv_protocol(evaluation_metric, plan.cv)
 
