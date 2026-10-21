@@ -4,6 +4,9 @@
 
 - **Never commit before user review.** Each implementation step: implement → present the
   changes for review → commit only after the user approves.
+- **Do not run the live pipeline by default** — it is slow (harness CV takes minutes).
+  Validate with unit/integration tests; ask the user before any live `slayer run` and
+  say why it is needed.
 - Each step is one logical unit of work; code and its docs land in the same commit.
 - **Every function gets a short docstring** — basic documentation of what it does; not
   perfect, just present.

@@ -18,7 +18,7 @@ class DefaultsConfig(BaseModel):
     budget_usd: float = Field(default=10.0, gt=0)
     submissions_per_day: int = Field(default=4, ge=1, le=10)
     autonomy: AutonomyPolicy = "approve-first"
-    dry_run: bool = False
+    dry_run: bool = True
     refresh_data: bool = False
 
 

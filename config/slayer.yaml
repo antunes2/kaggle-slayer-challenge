@@ -3,7 +3,7 @@ defaults:
   budget_usd: 10.0
   submissions_per_day: 4
   autonomy: approve-first
-  dry_run: false
+  dry_run: true
 
 paths:
   runs_dir: runs

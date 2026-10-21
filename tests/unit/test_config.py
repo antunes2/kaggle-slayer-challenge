@@ -23,7 +23,7 @@ def test_slayer_config_defaults_when_file_missing(tmp_path: Path) -> None:
     assert cfg.defaults.budget_usd == 10.0
     assert cfg.defaults.submissions_per_day == 4
     assert cfg.defaults.autonomy == "approve-first"
-    assert cfg.defaults.dry_run is False
+    assert cfg.defaults.dry_run is True
     assert cfg.paths.runs_dir == Path("runs")
     assert cfg.llm.base_url == "https://openrouter.ai/api/v1"
 

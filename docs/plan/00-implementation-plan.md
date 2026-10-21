@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v1.4 (Phase 2 complete: REVIEW + SUBMIT live-validated, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
+> **Status:** v1.5 (C0003 re-sequencing; Phase 3 step 3.1 iteration engine, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -273,9 +273,9 @@ runs/                      # run artifacts (gitignored)
 | **0. Foundation** | infra only | config loading; OpenRouter client w/ JSON mode + cost tracking; KaggleClient wrapper; journal + run store; `slayer init` | `slayer init` pings both APIs green; journal round-trip unit-tested | ✅ |
 | **1. Data collection & EDA** | INIT → DATA_COLLECTION → ANALYSIS | loop engine + `slayer run <comp>`; download + safe unzip + manifest; profiler + data analyst → `DataReport` | Real comp: data on disk, human-readable EDA report in `reports/` | ✅ |
 | **2. Baseline & first submission (mocked)** | PLANNING → BASELINE → REVIEW → SUBMIT | CV harness; planner `StrategyPlan`; researcher pipeline codegen; reviewer gate; `SubmissionSink` abstraction (**MockSink** for MVP); submission approval flow | End-to-end pipeline completes with submission recorded via MockSink; approval + quota logic exercised; zero real quota spent | ✅ |
-| **2b. First live submission** | go live | flip to `KaggleSink`; same pipeline against a Playground Series comp | Real submission accepted by Kaggle; score recorded in journal | ⬜ |
-| **3. Iteration engine** | the heart | experiment loop; candidate registry (experiments.db); quota-aware submit policy; CV/LB tracking; feedback from LB → planner | ≥5 sequential iterations with measurable CV improvement; no quota violations | ⬜ |
-| **4. Monitoring & resilience** | MONITOR + ops | leaderboard monitoring; deadline awareness; pause/resume checkpoints; budget enforcement; `leaderboard` command | 24h unattended run on a playground comp without incident | ⬜ |
+| **2b. First live submission** | go live *(re-sequenced after Phase 3, C0003)* | flip to `KaggleSink` (`--live`); same pipeline against a Playground Series comp | Real submission accepted by Kaggle; score recorded in journal | ⬜ |
+| **3. Iteration engine & resilience** | the heart | experiment loop (propose → run → review → submit per roadmap step, with repair-retry); budget enforcement; `slayer resume`; harness timeout handling (Q0002) | ≥5 sequential iterations with measurable CV improvement; interrupted run resumes without redoing completed phases | 🔶 |
+| **4. Monitoring & leaderboard** | MONITOR + ops | leaderboard monitoring; deadline awareness; `leaderboard` command; LB-score polling into the registry; 24h ops | 24h unattended run on a playground comp without incident | ⬜ |
 | **5. Autonomy & polish** | UX depth | daemon + `attach`; `slayer chat` REPL; richer live view; agentic orchestrator upgrade (dynamic replanning); cost report | User can steer a live run via chat; top-20% achieved on target comp | ⬜ |
 
 Phases 0–2 form the **MVP slice**: every architectural piece exists but shallow (all
@@ -307,6 +307,14 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | 2.2 | PLANNING: planner agent → `StrategyPlan` (problem type, CV protocol, roadmap, submission policy) | ✅ ([design](designs/07-planner.md)) |
 | 2.3 | BASELINE: researcher agent pipeline codegen + registry wiring → first scored candidate | ✅ ([design](designs/08-researcher-and-baseline.md)) |
 | 2.4 | REVIEW + SUBMIT (mock): reviewer gate, `SubmissionSink` (MockSink), approve-first flow | ✅ ([design](designs/09-review-and-submission.md)) |
+
+**Phase 3 step breakdown** (2b re-sequenced after Phase 3 per [C0003](changes/C0003-reorder-2b-and-scope.md)):
+
+| Step | Scope | Status |
+|------|-------|--------|
+| 3.1 | Iteration engine core: per-roadmap-step propose → evaluate → review → submit loop, repair-retry on failed candidates with error feedback, LLM budget enforcement | ✅ ([design](designs/10-iteration-engine.md); live loop validation pending user go-ahead) |
+| 3.2 | `slayer resume <run>`: resume paused/failed runs without redoing completed phases (registry-driven skip logic) | ⬜ |
+| 3.3 | Harness timeout handling per [Q0002](questions/Q0002-harness-timeout-handling.md): configurable budget, budget-aware researcher prompt, probe fold + incremental fold reporting | ⬜ |
 
 ## 12. Testing Strategy
 
