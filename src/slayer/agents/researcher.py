@@ -17,9 +17,16 @@ class MLResearcherAgent(Agent):
         feature_plan_json: str,
         guidance: list[str],
         roadmap_step: RoadmapStep,
+        iteration_context: str = "",
     ) -> PipelineProposal:
-        """Generate the pipeline code for one roadmap step."""
+        """Generate the pipeline code for one roadmap step, with prior-run feedback."""
         guidance_text = "\n".join(f"- {g}" for g in guidance) or "- (none)"
+        context_section = (
+            f"Iteration context (previous candidates, scores, feedback — obey it):\n"
+            f"{iteration_context}\n\n"
+            if iteration_context
+            else ""
+        )
         user_message = (
             "Dataset profile (exact column names and dtypes):\n"
             f"{profile_md}\n\n"
@@ -29,6 +36,7 @@ class MLResearcherAgent(Agent):
             f"{feature_plan_json}\n\n"
             "Strategy guidance (mandatory):\n"
             f"{guidance_text}\n\n"
+            f"{context_section}"
             "Current roadmap step to implement (JSON):\n"
             f"{roadmap_step.model_dump_json(indent=2)}\n\n"
             "Write the pipeline.py for this step."

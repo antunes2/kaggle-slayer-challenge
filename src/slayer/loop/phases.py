@@ -10,8 +10,8 @@ from slayer.cv import CandidateRunError, build_cv_protocol, run_candidate
 from slayer.kaggle import QuotaManager
 from slayer.loop.data import data_collection_phase
 from slayer.loop.engine import Handler, Phase, RunContext
-from slayer.schemas import DataAnalystOutput, StrategyPlan
-from slayer.workspace import EventType, ModelCandidate
+from slayer.schemas import CVResult, DataAnalystOutput, StrategyPlan
+from slayer.workspace import CandidateRecord, EventType, ModelCandidate
 
 
 def init_phase(ctx: RunContext) -> None:
@@ -147,6 +147,39 @@ def _strip_code_fences(code: str) -> str:
     return text.strip() + "\n"
 
 
+def _evaluate_proposal(
+    ctx: RunContext, plan: StrategyPlan, proposal, protocol, step
+) -> tuple[CandidateRecord, CVResult]:
+    """Register, write, and evaluate one proposal through the harness."""
+    record = ctx.registry.add(
+        ModelCandidate(
+            model_type=proposal.model_family,
+            notes=(proposal.description or step.title)[:200],
+            params={"roadmap_step": step.title, "priority": step.priority},
+        )
+    )
+    candidate_dir = ctx.run.workspace("models") / record.id
+    candidate_dir.mkdir(parents=True, exist_ok=True)
+    pipeline_code = _strip_code_fences(proposal.pipeline_code)
+    (candidate_dir / "pipeline.py").write_text(pipeline_code, encoding="utf-8")
+    try:
+        compile(pipeline_code, "pipeline.py", "exec")
+    except SyntaxError as exc:
+        ctx.registry.set_status(record.id, "failed")
+        return record, CVResult(
+            candidate_id=record.id,
+            metric=protocol.metric,
+            status="error",
+            error=f"syntax error: {exc}",
+        )
+    result = run_candidate(ctx.run, record.id, protocol, plan.problem_type, plan.target_column)
+    if result.status == "ok":
+        ctx.registry.record_cv(record.id, result.mean_score, result.std_score)
+    else:
+        ctx.registry.set_status(record.id, "failed")
+    return record, result
+
+
 def baseline_phase(ctx: RunContext) -> None:
     """BASELINE: researcher writes the first pipeline; harness scores it; registry records it."""
     if ctx.llm is None or ctx.agent_configs is None:
@@ -160,6 +193,8 @@ def baseline_phase(ctx: RunContext) -> None:
 
     plan = StrategyPlan.model_validate_json(strategy_json)
     step = sorted(plan.roadmap, key=lambda s: s.priority)[0]
+    evaluation_metric = json.loads(competition_json).get("evaluation_metric") or ""
+    protocol = build_cv_protocol(evaluation_metric, plan.cv)
 
     researcher = MLResearcherAgent(
         llm=ctx.llm,
@@ -185,40 +220,12 @@ def baseline_phase(ctx: RunContext) -> None:
     )
     ctx.say(f"  researcher proposes {proposal.model_family}: {step.title}")
 
-    record = ctx.registry.add(
-        ModelCandidate(
-            model_type=proposal.model_family,
-            notes=(proposal.description or step.title)[:200],
-        )
-    )
-    candidate_dir = ctx.run.workspace("models") / record.id
-    candidate_dir.mkdir(parents=True, exist_ok=True)
-    pipeline_code = _strip_code_fences(proposal.pipeline_code)
-    (candidate_dir / "pipeline.py").write_text(pipeline_code, encoding="utf-8")
-
-    try:
-        compile(pipeline_code, "pipeline.py", "exec")
-    except SyntaxError as exc:
-        ctx.registry.set_status(record.id, "failed")
-        raise CandidateRunError(f"candidate {record.id} has a syntax error: {exc}") from exc
-
-    evaluation_metric = json.loads(competition_json).get("evaluation_metric") or ""
-    protocol = build_cv_protocol(evaluation_metric, plan.cv)
-    result = run_candidate(
-        ctx.run,
-        record.id,
-        protocol,
-        plan.problem_type,
-        plan.target_column,
-    )
+    record, result = _evaluate_proposal(ctx, plan, proposal, protocol, step)
     if result.status != "ok":
-        ctx.registry.set_status(record.id, "failed")
         tail = (result.error or "")[-400:]
         raise CandidateRunError(
             f"candidate {record.id} failed the harness ({result.status}):\n{tail}"
         )
-
-    ctx.registry.record_cv(record.id, result.mean_score, result.std_score)
     ctx.say(
         f"  baseline {record.id} scored: {result.mean_score:.5f} +/- {result.std_score:.5f} "
         f"({protocol.k_folds} folds, {result.elapsed_s:.0f}s)"
@@ -235,15 +242,118 @@ def _load_plan(ctx: RunContext) -> tuple[StrategyPlan, dict]:
     return plan, competition
 
 
+def _iteration_context(ctx: RunContext) -> str:
+    """Build the researcher's feedback bundle: candidates, last review, last failure."""
+    parts = ["Candidates so far:\n" + ctx.registry.summary_for_agent(n=8)]
+    verdicts = ctx.journal.read(type=EventType.AGENT_OUTPUT, agent="reviewer")
+    if verdicts:
+        last = verdicts[-1].data
+        parts.append(
+            f"Last review verdict: {last.get('decision')} "
+            f"(risk flags: {last.get('risk_flags')}): {last.get('reasoning', '')}"
+        )
+    failed = [r for r in ctx.registry.list() if r.status == "failed"]
+    if failed:
+        log_path = ctx.run.workspace("models") / failed[-1].id / "run.log"
+        if log_path.exists():
+            parts.append(
+                "Last failed candidate log tail (fix this):\n"
+                + log_path.read_text(encoding="utf-8", errors="replace")[-500:]
+            )
+    return "\n\n".join(parts)
+
+
+def _budget_out(ctx: RunContext) -> bool:
+    """Check the run's LLM budget; journal a warning and return True when exhausted."""
+    cost = getattr(ctx.llm, "cost", None)
+    if cost is None:
+        return False
+    used = cost.total_usd
+    if used >= ctx.run.budget_usd:
+        ctx.journal.append(
+            agent="loop",
+            type=EventType.BUDGET_WARNING,
+            data={"used_usd": used, "budget_usd": ctx.run.budget_usd},
+            run=ctx.run.run_id,
+        )
+        ctx.say(f"  LLM budget exhausted (${used:.4f} >= ${ctx.run.budget_usd}) — stopping")
+        return True
+    return False
+
+
 def iterate_phase(ctx: RunContext) -> None:
-    """ITERATE (MVP passthrough): the full iteration engine arrives in Phase 3."""
-    ctx.journal.append(
-        agent="loop",
-        type=EventType.ITERATE_SKIPPED,
-        data={"reason": "iteration engine arrives in Phase 3"},
-        run=ctx.run.run_id,
+    """ITERATE: one candidate per pending roadmap step, with repair-retry and budget stops."""
+    if ctx.llm is None or ctx.agent_configs is None:
+        raise AnalysisError("iterate requires the LLM client — check OPENROUTER_API_KEY")
+    plan, competition = _load_plan(ctx)
+    protocol = build_cv_protocol(competition.get("evaluation_metric") or "", plan.cv)
+
+    existing_steps = {
+        r.params.get("roadmap_step")
+        for r in ctx.registry.list()
+        if r.params.get("roadmap_step") and r.status != "failed"
+    }
+    pending = [
+        s for s in sorted(plan.roadmap, key=lambda s: s.priority) if s.title not in existing_steps
+    ]
+    if not pending:
+        ctx.say("  no pending roadmap steps — nothing to iterate")
+        return
+
+    reports_dir = ctx.run.workspace("reports")
+    profile_md = (ctx.run.workspace("eda") / "profile.md").read_text(encoding="utf-8")
+    data_report_json = (reports_dir / "data_report.json").read_text(encoding="utf-8")
+    feature_plan_json = (reports_dir / "feature_plan.json").read_text(encoding="utf-8")
+    researcher = MLResearcherAgent(
+        llm=ctx.llm,
+        config=ctx.agent_configs.ml_researcher,
+        journal=ctx.journal,
+        run_id=ctx.run.run_id,
     )
-    ctx.say("  iteration engine arrives in Phase 3 — proceeding to review")
+
+    def propose(step, extra: str = ""):
+        """Ask the researcher for a pipeline for the given step."""
+        proposal = researcher.propose(
+            profile_md=profile_md,
+            data_report_json=data_report_json,
+            feature_plan_json=feature_plan_json,
+            guidance=plan.guidance,
+            roadmap_step=step,
+            iteration_context=_iteration_context(ctx) + (f"\n\n{extra}" if extra else ""),
+        )
+        ctx.journal.append(
+            agent="ml_researcher",
+            type=EventType.AGENT_OUTPUT,
+            data={
+                "roadmap_step": step.title,
+                "model_family": proposal.model_family,
+                "feature_ideas_used": proposal.feature_ideas_used,
+            },
+            run=ctx.run.run_id,
+        )
+        return proposal
+
+    for step in pending:
+        if _budget_out(ctx):
+            return
+        ctx.say(f"  iterating step {step.priority}: {step.title}")
+        proposal = propose(step)
+        record, result = _evaluate_proposal(ctx, plan, proposal, protocol, step)
+        if result.status != "ok":
+            ctx.say(f"  {record.id} failed ({result.status}) — one repair attempt")
+            if _budget_out(ctx):
+                return
+            failure_note = f"Your previous attempt failed:\n{(result.error or '')[-600:]}"
+            proposal = propose(step, extra=failure_note)
+            record, result = _evaluate_proposal(ctx, plan, proposal, protocol, step)
+            if result.status != "ok":
+                ctx.say(f"  {record.id} failed again — moving to next step")
+                continue
+        ctx.say(
+            f"  {record.id} scored: {result.mean_score:.5f} +/- {result.std_score:.5f}"
+        )
+        review_phase(ctx)
+        submit_phase(ctx)
 
 
 def review_phase(ctx: RunContext) -> None:
@@ -264,13 +374,14 @@ def review_phase(ctx: RunContext) -> None:
     scored.sort(key=lambda r: r.cv_score, reverse=protocol.higher_is_better)
     record = scored[0]
 
+    models_dir = ctx.run.workspace("models") / record.id
+    pipeline_path = models_dir / "pipeline.py"
+    cv_results_path = models_dir / "cv_results.json"
     pipeline_code = (
-        (ctx.run.workspace("models") / record.id / "pipeline.py").read_text(encoding="utf-8")
-        if (ctx.run.workspace("models") / record.id / "pipeline.py").exists()
-        else ""
+        pipeline_path.read_text(encoding="utf-8") if pipeline_path.exists() else ""
     )
-    cv_results = (ctx.run.workspace("models") / record.id / "cv_results.json").read_text(
-        encoding="utf-8"
+    cv_results = (
+        cv_results_path.read_text(encoding="utf-8") if cv_results_path.exists() else "{}"
     )
     data_report_json = (ctx.run.workspace("reports") / "data_report.json").read_text(
         encoding="utf-8"
@@ -294,6 +405,7 @@ def review_phase(ctx: RunContext) -> None:
             "candidate_id": record.id,
             "decision": verdict.decision,
             "risk_flags": verdict.risk_flags,
+            "reasoning": verdict.reasoning[:400],
         },
         run=ctx.run.run_id,
     )
