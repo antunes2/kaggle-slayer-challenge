@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v1.3 (Phase 2 step 2.3: researcher + baseline live-validated; D0006 model routing, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
+> **Status:** v1.4 (Phase 2 complete: REVIEW + SUBMIT live-validated, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -272,7 +272,7 @@ runs/                      # run artifacts (gitignored)
 |-------|-------|------------------|---------------------|--------|
 | **0. Foundation** | infra only | config loading; OpenRouter client w/ JSON mode + cost tracking; KaggleClient wrapper; journal + run store; `slayer init` | `slayer init` pings both APIs green; journal round-trip unit-tested | ✅ |
 | **1. Data collection & EDA** | INIT → DATA_COLLECTION → ANALYSIS | loop engine + `slayer run <comp>`; download + safe unzip + manifest; profiler + data analyst → `DataReport` | Real comp: data on disk, human-readable EDA report in `reports/` | ✅ |
-| **2. Baseline & first submission (mocked)** | PLANNING → BASELINE → REVIEW → SUBMIT | CV harness; planner `StrategyPlan`; researcher pipeline codegen; reviewer gate; `SubmissionSink` abstraction (**MockSink** for MVP); submission approval flow | End-to-end pipeline completes with submission recorded via MockSink; approval + quota logic exercised; zero real quota spent | 🔶 |
+| **2. Baseline & first submission (mocked)** | PLANNING → BASELINE → REVIEW → SUBMIT | CV harness; planner `StrategyPlan`; researcher pipeline codegen; reviewer gate; `SubmissionSink` abstraction (**MockSink** for MVP); submission approval flow | End-to-end pipeline completes with submission recorded via MockSink; approval + quota logic exercised; zero real quota spent | ✅ |
 | **2b. First live submission** | go live | flip to `KaggleSink`; same pipeline against a Playground Series comp | Real submission accepted by Kaggle; score recorded in journal | ⬜ |
 | **3. Iteration engine** | the heart | experiment loop; candidate registry (experiments.db); quota-aware submit policy; CV/LB tracking; feedback from LB → planner | ≥5 sequential iterations with measurable CV improvement; no quota violations | ⬜ |
 | **4. Monitoring & resilience** | MONITOR + ops | leaderboard monitoring; deadline awareness; pause/resume checkpoints; budget enforcement; `leaderboard` command | 24h unattended run on a playground comp without incident | ⬜ |
@@ -306,7 +306,7 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | 2.1b | Ops polish pulled forward from the Phase 1 review: per-competition data cache (skip re-downloads), `slayer status`/`slayer journal` commands, docstring backfill across src | ✅ |
 | 2.2 | PLANNING: planner agent → `StrategyPlan` (problem type, CV protocol, roadmap, submission policy) | ✅ ([design](designs/07-planner.md)) |
 | 2.3 | BASELINE: researcher agent pipeline codegen + registry wiring → first scored candidate | ✅ ([design](designs/08-researcher-and-baseline.md)) |
-| 2.4 | REVIEW + SUBMIT (mock): reviewer gate, `SubmissionSink` (MockSink), approve-first flow | ⬜ |
+| 2.4 | REVIEW + SUBMIT (mock): reviewer gate, `SubmissionSink` (MockSink), approve-first flow | ✅ ([design](designs/09-review-and-submission.md)) |
 
 ## 12. Testing Strategy
 

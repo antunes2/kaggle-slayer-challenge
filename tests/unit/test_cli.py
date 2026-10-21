@@ -193,15 +193,27 @@ class _FakeLLM:
             notes=None,
         )
 
+    @staticmethod
+    def _review_verdict():
+        """Canned reviewer verdict."""
+        from slayer.schemas import ReviewVerdict
+
+        return ReviewVerdict(
+            decision="approve",
+            reasoning="baseline is sound",
+            risk_flags=[],
+        )
+
     def complete_structured(self, messages, model, response_model, **kwargs):
         """Return the canned output matching the requested model."""
         from slayer.llm import LLMResponse
-        from slayer.schemas import DataAnalystOutput, PipelineProposal, StrategyPlan
+        from slayer.schemas import DataAnalystOutput, PipelineProposal, ReviewVerdict, StrategyPlan
 
         canned = {
             DataAnalystOutput: self._analyst_output(),
             StrategyPlan: self._strategy_plan(),
             PipelineProposal: self._pipeline_proposal(),
+            ReviewVerdict: self._review_verdict(),
         }[response_model]
         return LLMResponse(content="{}", model=model), canned
 
@@ -217,7 +229,13 @@ def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     (config_dir / "slayer.yaml").write_text(
-        yaml.safe_dump({"paths": {"runs_dir": str(tmp_path / "runs")}}), encoding="utf-8"
+        yaml.safe_dump(
+            {
+                "paths": {"runs_dir": str(tmp_path / "runs")},
+                "defaults": {"dry_run": True, "autonomy": "agentic"},
+            }
+        ),
+        encoding="utf-8",
     )
     env = tmp_path / ".env"
     env.write_text(
@@ -232,6 +250,7 @@ def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "run created" in result.output
     assert "paused" in result.output
+    assert "submitted" in result.output
 
     runs = [child for child in (tmp_path / "runs").iterdir() if (child / "run.json").is_file()]
     assert len(runs) == 1
@@ -241,6 +260,9 @@ def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
     assert (runs[0] / "workspace" / "models").is_dir()
     assert len(list((runs[0] / "workspace" / "models").iterdir())) == 1
     assert (runs[0] / "journal.jsonl").is_file()
+
+    journal_text = (runs[0] / "journal.jsonl").read_text(encoding="utf-8")
+    assert "submission.mocked" in journal_text
 
 
 def test_run_command_requires_kaggle_token(tmp_path, monkeypatch) -> None:

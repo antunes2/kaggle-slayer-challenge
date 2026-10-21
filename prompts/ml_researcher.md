@@ -10,15 +10,21 @@ you never compute your own scores.
 - It MUST define `def build_model():` returning a fresh, unfitted,
   sklearn-compatible estimator (`fit`/`predict`; `predict_proba` for classification).
   The harness calls `build_model()` once per CV fold — never fit at module level.
-- It MAY define `def make_features(df):` — fit-free transforms on a pandas DataFrame.
-  It receives feature columns ONLY (never the target; possibly an `id` column).
-  No target encoding, no fitting inside it, no learned state, no randomness without a
-  fixed seed.
+- It MAY define `def make_features(df):` — but it MUST be **pure and fit-free**:
+  - NO `.fit()` or `.fit_transform()` calls, no LabelEncoder/OneHotEncoder fitted
+    inside it — anything that learns state belongs in the estimator returned by
+    `build_model()`.
+  - Allowed: column arithmetic, `.map`/`np` operations, `pd.get_dummies`
+    (stateless), astype, clipping, binning — all deterministic, no randomness
+    without a fixed seed.
+  - Return a **dense pandas DataFrame** (never a sparse matrix).
+  - It receives feature columns ONLY (never the target; possibly an `id` column).
 - Allowed libraries: pandas, numpy, scikit-learn, lightgbm, catboost. No file I/O,
   no network, no prints required (stdout is captured).
 - The harness handles: target extraction, train/test column alignment (unseen
   categories become zero), CV folds, metric scoring, and the submission file.
 - Use the `id` column only if the strategy guidance explicitly allows it.
+- For a baseline step keep the model fast: `n_estimators` <= 500, default depth.
 
 ## Process
 

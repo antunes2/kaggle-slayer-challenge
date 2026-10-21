@@ -7,6 +7,7 @@ from enum import StrEnum
 from slayer.config import AgentsConfig
 from slayer.kaggle import KaggleClient
 from slayer.llm import LLMClient
+from slayer.submissions import SubmissionSink
 from slayer.workspace import CandidateRegistry, EventType, Journal, Run, RunStatus, RunStore
 
 Handler = Callable[["RunContext"], None]
@@ -51,6 +52,8 @@ class RunContext:
     reporter: Callable[[str], None] | None = None
     llm: LLMClient | None = None
     agent_configs: AgentsConfig | None = None
+    sink: SubmissionSink | None = None
+    approver: Callable[[str], bool] | None = None
 
     def say(self, message: str) -> None:
         """Stream a progress line to the reporter (if attached)."""

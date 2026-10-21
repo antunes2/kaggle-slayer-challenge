@@ -19,6 +19,7 @@ from slayer.cv import CandidateRunError, MetricError
 from slayer.kaggle import KaggleClient, KaggleError
 from slayer.llm import LLMClient, LLMError
 from slayer.loop import DataCollectionError, LoopEngine, RunContext
+from slayer.submissions import KaggleSink, MockSink
 from slayer.workspace import EventType, RunStatus, RunStore
 
 app = typer.Typer(add_completion=False, help="Slayer — a team of agents that competes on Kaggle.")
@@ -256,6 +257,8 @@ def run(
         reporter=lambda message: typer.echo(f"  {message}"),
         llm=llm,
         agent_configs=agents_cfg,
+        sink=MockSink() if run.dry_run else KaggleSink(kaggle),
+        approver=lambda question: typer.confirm(question, default=False),
     )
     try:
         final = LoopEngine(ctx).start()

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 
-from slayer.agents import DataAnalystAgent, MLResearcherAgent, PlannerAgent
+from slayer.agents import DataAnalystAgent, MLResearcherAgent, PlannerAgent, ReviewerAgent
 from slayer.agents.planner import render_strategy_plan_md
 from slayer.analysis import AnalysisError, profile_data
 from slayer.analysis.render import render_data_report_md
 from slayer.cv import CandidateRunError, build_cv_protocol, run_candidate
+from slayer.kaggle import QuotaManager
 from slayer.loop.data import data_collection_phase
 from slayer.loop.engine import Handler, Phase, RunContext
 from slayer.schemas import DataAnalystOutput, StrategyPlan
@@ -224,10 +225,154 @@ def baseline_phase(ctx: RunContext) -> None:
     )
 
 
+def _load_plan(ctx: RunContext) -> tuple[StrategyPlan, dict]:
+    """Load the strategy plan and competition context for later phases."""
+    reports_dir = ctx.run.workspace("reports")
+    plan = StrategyPlan.model_validate_json(
+        (reports_dir / "strategy_plan.json").read_text(encoding="utf-8")
+    )
+    competition = json.loads((reports_dir / "competition.json").read_text(encoding="utf-8"))
+    return plan, competition
+
+
+def iterate_phase(ctx: RunContext) -> None:
+    """ITERATE (MVP passthrough): the full iteration engine arrives in Phase 3."""
+    ctx.journal.append(
+        agent="loop",
+        type=EventType.ITERATE_SKIPPED,
+        data={"reason": "iteration engine arrives in Phase 3"},
+        run=ctx.run.run_id,
+    )
+    ctx.say("  iteration engine arrives in Phase 3 — proceeding to review")
+
+
+def review_phase(ctx: RunContext) -> None:
+    """REVIEW: the reviewer agent judges the best scored, unreviewed candidate."""
+    if ctx.llm is None or ctx.agent_configs is None:
+        raise AnalysisError("review requires the LLM client — check OPENROUTER_API_KEY")
+    plan, competition = _load_plan(ctx)
+    protocol = build_cv_protocol(competition.get("evaluation_metric") or "", plan.cv)
+
+    scored = [
+        r
+        for r in ctx.registry.list()
+        if r.cv_score is not None and r.status not in ("approved", "rejected", "submitted")
+    ]
+    if not scored:
+        ctx.say("  nothing to review — no unreviewed scored candidates")
+        return
+    scored.sort(key=lambda r: r.cv_score, reverse=protocol.higher_is_better)
+    record = scored[0]
+
+    pipeline_code = (
+        (ctx.run.workspace("models") / record.id / "pipeline.py").read_text(encoding="utf-8")
+        if (ctx.run.workspace("models") / record.id / "pipeline.py").exists()
+        else ""
+    )
+    cv_results = (ctx.run.workspace("models") / record.id / "cv_results.json").read_text(
+        encoding="utf-8"
+    )
+    data_report_json = (ctx.run.workspace("reports") / "data_report.json").read_text(
+        encoding="utf-8"
+    )
+    reviewer = ReviewerAgent(
+        llm=ctx.llm,
+        config=ctx.agent_configs.reviewer,
+        journal=ctx.journal,
+        run_id=ctx.run.run_id,
+    )
+    verdict = reviewer.review(
+        pipeline_code=pipeline_code,
+        cv_results_json=cv_results,
+        strategy_guidance=plan.guidance,
+        data_report_json=data_report_json,
+    )
+    ctx.journal.append(
+        agent="reviewer",
+        type=EventType.AGENT_OUTPUT,
+        data={
+            "candidate_id": record.id,
+            "decision": verdict.decision,
+            "risk_flags": verdict.risk_flags,
+        },
+        run=ctx.run.run_id,
+    )
+    if verdict.decision == "approve":
+        ctx.registry.set_status(record.id, "approved")
+    elif verdict.decision == "reject":
+        ctx.registry.set_status(record.id, "rejected")
+    ctx.say(
+        f"  review {record.id}: {verdict.decision.upper()} — {verdict.reasoning[:120]}"
+    )
+
+
+def submit_phase(ctx: RunContext) -> None:
+    """SUBMIT: gate (CV improvement + quota + approval) then submit via the sink."""
+    if ctx.sink is None:
+        raise AnalysisError("submit requires a submission sink — check run configuration")
+    plan, competition = _load_plan(ctx)
+    protocol = build_cv_protocol(competition.get("evaluation_metric") or "", plan.cv)
+
+    approved = [
+        r
+        for r in ctx.registry.list()
+        if r.cv_score is not None and r.status == "approved"
+    ]
+    if not approved:
+        ctx.say("  nothing approved to submit — skipping submission")
+        return
+    approved.sort(key=lambda r: r.cv_score, reverse=protocol.higher_is_better)
+    record = approved[0]
+
+    best_submitted = ctx.registry.best(
+        1, higher_is_better=protocol.higher_is_better, submitted_only=True
+    )
+    if best_submitted:
+        delta = (record.cv_score - best_submitted[0].cv_score) * (
+            1 if protocol.higher_is_better else -1
+        )
+        if delta < plan.min_cv_improvement:
+            ctx.say(
+                f"  skipping {record.id}: CV improvement {delta:.6f} < "
+                f"gate {plan.min_cv_improvement}"
+            )
+            return
+
+    if not ctx.run.dry_run:
+        quota = QuotaManager(ctx.journal, ctx.run.submissions_per_day)
+        if not quota.can_submit():
+            ctx.say(f"  daily submission quota exhausted ({ctx.run.submissions_per_day}/day)")
+            return
+
+    if ctx.run.autonomy == "approve-first":
+        if ctx.approver is None:
+            ctx.say("  approval required (approve-first) but no approver — skipping")
+            return
+        question = (
+            f"Submit {record.id} ({record.model_type}, CV {record.cv_score:.5f}) "
+            f"to {ctx.run.competition}?"
+        )
+        if not ctx.approver(question):
+            ctx.say(f"  user declined submission of {record.id}")
+            return
+
+    message = f"slayer {record.id}: {record.model_type} CV={record.cv_score:.5f}"
+    result = ctx.sink.submit(
+        ctx.run, ctx.registry, ctx.journal, record, message=message
+    )
+    ctx.say(
+        f"  submitted {record.id} as {result.submission_id} "
+        f"{'(mock)' if result.simulated else '(kaggle)'}"
+    )
+
+
 HANDLERS: dict[Phase, Handler] = {
     Phase.INIT: init_phase,
     Phase.DATA_COLLECTION: data_collection_phase,
     Phase.ANALYSIS: analysis_phase,
     Phase.PLANNING: planning_phase,
     Phase.BASELINE: baseline_phase,
+    Phase.ITERATE: iterate_phase,
+    Phase.REVIEW: review_phase,
+    Phase.SUBMIT: submit_phase,
 }

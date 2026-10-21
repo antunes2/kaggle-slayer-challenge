@@ -22,6 +22,8 @@ class EventType:
     CANDIDATE_CV = "candidate.scored"
     CANDIDATE_LB = "candidate.lb_scored"
     SUBMISSION_ACCEPTED = "submission.accepted"
+    SUBMISSION_MOCKED = "submission.mocked"
+    ITERATE_SKIPPED = "iterate.skipped"
     USER_GUIDANCE = "user.guidance"
     BUDGET_WARNING = "budget.warning"
 
