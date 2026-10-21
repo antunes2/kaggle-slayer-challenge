@@ -6,6 +6,7 @@ from slayer.schemas.analysis import (
     ProblemType,
 )
 from slayer.schemas.cv import CVProtocol, CVResult, FoldScore
+from slayer.schemas.researcher import PipelineProposal
 from slayer.schemas.strategy import CVSettings, RoadmapStep, StrategyPlan
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "FeatureIdea",
     "FeaturePlan",
     "FoldScore",
+    "PipelineProposal",
     "ProblemType",
     "RoadmapStep",
     "StrategyPlan",

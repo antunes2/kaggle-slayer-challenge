@@ -1,9 +1,9 @@
 # Q0001 — Which OpenRouter model(s) should each agent use?
 
-- **Status:** open
+- **Status:** settled → [D0006](../decisions/D0006-model-routing-gemini-flash.md)
 - **Raised:** 2026-10-19
-- **Blocks:** nothing — default in place (`minimax/minimax-m3.1-flash:free` for all
-  agents via `config/agents.yaml` defaults).
+- **Blocks:** nothing — default in place (`google/gemini-2.5-flash` tier per
+  `config/agents.yaml`).
 
 ## Question
 

@@ -32,3 +32,4 @@ What this implies — including downsides we consciously accept.
 - [D0003 — Orchestrator pattern: deterministic pipeline with LLM decision points](D0003-orchestrator-deterministic-pipeline.md)
 - [D0004 — MVP target: Playground Series tabular competition](D0004-mvp-target-playground-competition.md)
 - [D0005 — Storage: JSONL journal for events + SQLite registry for entity state](D0005-storage-journal-and-sqlite-registry.md)
+- [D0006 — Model routing: fast Gemini Flash tier as default](D0006-model-routing-gemini-flash.md)

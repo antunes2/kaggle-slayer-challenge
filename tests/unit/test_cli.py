@@ -116,9 +116,12 @@ class _FakeRunKaggle:
 
         zip_path = target_dir / f"{competition}.zip"
         with zipfile.ZipFile(zip_path, "w") as zf:
-            zf.writestr("train.csv", "id,x,target\n1,5,0\n2,6,1\n3,7,0\n")
-            zf.writestr("test.csv", "id,x\n4,8\n")
-            zf.writestr("sample_submission.csv", "id,target\n4,0.5\n")
+            zf.writestr(
+                "train.csv",
+                "id,x,target\n0,5,0\n1,6,1\n2,7,0\n3,8,1\n4,5.5,0\n5,6.5,1\n6,7.5,0\n7,8.5,1\n",
+            )
+            zf.writestr("test.csv", "id,x\n8,1.2\n9,3.3\n")
+            zf.writestr("sample_submission.csv", "id,target\n8,0.5\n9,0.5\n")
         return zip_path
 
 
@@ -173,14 +176,32 @@ class _FakeLLM:
             summary="ok",
         )
 
+    @staticmethod
+    def _pipeline_proposal():
+        """Canned runnable pipeline proposal."""
+        from slayer.schemas import PipelineProposal
+
+        return PipelineProposal(
+            model_family="linear",
+            description="logistic regression baseline",
+            pipeline_code=(
+                "from sklearn.linear_model import LogisticRegression\n\n"
+                "def build_model():\n"
+                "    return LogisticRegression()\n"
+            ),
+            feature_ideas_used=[],
+            notes=None,
+        )
+
     def complete_structured(self, messages, model, response_model, **kwargs):
         """Return the canned output matching the requested model."""
         from slayer.llm import LLMResponse
-        from slayer.schemas import DataAnalystOutput, StrategyPlan
+        from slayer.schemas import DataAnalystOutput, PipelineProposal, StrategyPlan
 
         canned = {
             DataAnalystOutput: self._analyst_output(),
             StrategyPlan: self._strategy_plan(),
+            PipelineProposal: self._pipeline_proposal(),
         }[response_model]
         return LLMResponse(content="{}", model=model), canned
 
@@ -217,6 +238,8 @@ def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
     assert (runs[0] / "workspace" / "data" / "train.csv").is_file()
     assert (runs[0] / "workspace" / "reports" / "data_report.json").is_file()
     assert (runs[0] / "workspace" / "reports" / "strategy_plan.json").is_file()
+    assert (runs[0] / "workspace" / "models").is_dir()
+    assert len(list((runs[0] / "workspace" / "models").iterdir())) == 1
     assert (runs[0] / "journal.jsonl").is_file()
 
 

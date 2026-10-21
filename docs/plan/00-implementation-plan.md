@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v1.2 (Phase 2 step 2.2: planner implemented + live-validated, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
+> **Status:** v1.3 (Phase 2 step 2.3: researcher + baseline live-validated; D0006 model routing, in review) · **Updated:** 2026-10-20 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -305,7 +305,7 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | 2.1 | CV harness (fixed skeleton, generated plugin) + sandbox runner + metric registry + `CVResult` | ✅ ([design](designs/06-cv-harness.md)) |
 | 2.1b | Ops polish pulled forward from the Phase 1 review: per-competition data cache (skip re-downloads), `slayer status`/`slayer journal` commands, docstring backfill across src | ✅ |
 | 2.2 | PLANNING: planner agent → `StrategyPlan` (problem type, CV protocol, roadmap, submission policy) | ✅ ([design](designs/07-planner.md)) |
-| 2.3 | BASELINE: researcher agent pipeline codegen + registry wiring → first scored candidate | ⬜ |
+| 2.3 | BASELINE: researcher agent pipeline codegen + registry wiring → first scored candidate | ✅ ([design](designs/08-researcher-and-baseline.md)) |
 | 2.4 | REVIEW + SUBMIT (mock): reviewer gate, `SubmissionSink` (MockSink), approve-first flow | ⬜ |
 
 ## 12. Testing Strategy
@@ -338,8 +338,9 @@ Decisions are recorded as ADRs in [`decisions/`](decisions/); open questions liv
 | D3 | Orchestrator pattern | Deterministic pipeline with LLM decision points; agentic upgrade in Phase 5 | [D0003](decisions/D0003-orchestrator-deterministic-pipeline.md) |
 | D4 | MVP target | Playground Series tabular competition (Phases 0–2b); real comp from Phase 3 | [D0004](decisions/D0004-mvp-target-playground-competition.md) |
 | D5 | Storage | Event-sourced: JSONL journal (events + agent blackboard + source of truth) + SQLite candidate registry (entity state, rebuildable from journal) | [D0005](decisions/D0005-storage-journal-and-sqlite-registry.md) |
+| D6 | Model routing | Fast Gemini Flash tier default (D0006); free reasoning model as per-agent fallback | [D0006](decisions/D0006-model-routing-gemini-flash.md) |
 
-**Open questions:** [Q0001 — OpenRouter model routing per agent](questions/Q0001-openrouter-models-per-agent.md).
+**Open questions:** *(none — Q0001 settled by D0006.)*
 
 ## 15. Documentation Conventions (`docs/plan/`)
 

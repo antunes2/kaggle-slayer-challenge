@@ -19,6 +19,7 @@ class CandidateStatus:
     APPROVED = "approved"
     REJECTED = "rejected"
     SUBMITTED = "submitted"
+    FAILED = "failed"
     RETIRED = "retired"
 
 

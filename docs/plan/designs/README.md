@@ -17,3 +17,4 @@ errors, finish with a short **Retro** section — the doc stays true, not aspira
 - [05 — ANALYSIS: Deterministic Profiler + Data Analyst Agent](05-analysis-and-data-analyst.md)
 - [06 — CV Harness & Sandbox Runner](06-cv-harness.md)
 - [07 — PLANNING: Planner Agent → StrategyPlan](07-planner.md)
+- [08 — BASELINE: Researcher Codegen → First Scored Candidate](08-researcher-and-baseline.md)

@@ -15,7 +15,7 @@ from slayer.config import (
     load_secrets,
     load_slayer_config,
 )
-from slayer.cv import MetricError
+from slayer.cv import CandidateRunError, MetricError
 from slayer.kaggle import KaggleClient, KaggleError
 from slayer.llm import LLMClient, LLMError
 from slayer.loop import DataCollectionError, LoopEngine, RunContext
@@ -259,7 +259,8 @@ def run(
     )
     try:
         final = LoopEngine(ctx).start()
-    except (KaggleError, DataCollectionError, AnalysisError, LLMError, MetricError) as exc:
+    except (KaggleError, DataCollectionError, AnalysisError, LLMError, MetricError,
+            CandidateRunError) as exc:
         typer.secho(f"run failed: {exc}", fg="red", bold=True)
         raise typer.Exit(1) from exc
     except Exception as exc:

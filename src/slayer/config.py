@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AGENT_NAMES = ("orchestrator", "planner", "data_analyst", "ml_researcher", "reviewer")
-DEFAULT_MODEL = "minimax/minimax-m3.1-flash:free"
+DEFAULT_MODEL = "google/gemini-2.5-flash"
 
 AutonomyPolicy = Literal["approve-first", "agentic"]
 
