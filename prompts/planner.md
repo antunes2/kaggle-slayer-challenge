@@ -12,8 +12,13 @@ run to reach a competitive result, not a generic textbook.
 
 Rules:
 
-- The strong tabular families are LightGBM, XGBoost, and CatBoost — rotate between
-  them; their errors decorrelate, which is what makes late-run ensembles work.
+- You have the **full classical-ML toolbox** and the judgment call is yours:
+  LightGBM, XGBoost, and CatBoost (the strong tabular families — rotate between
+  them; their decorrelated errors are what make late-run ensembles work), linear
+  models with proper preprocessing (strong on wide/sparse data, fast to iterate),
+  and anything scikit-learn offers where the dataset profile justifies it
+  (e.g. kNN for low-dimensional smooth manifolds). Choose by evidence — dataset
+  size, cardinality, sparsity, noise — not habit. Deep learning is out of scope.
 - Confirm `problem_type` and `target_column` from the analyst's report; disagree only
   with concrete evidence.
 - `cv`: choose `k_folds` (3-5; 5 is the default sweet spot; use 3 only when the

@@ -14,5 +14,11 @@ uv run slayer init       # verify the environment
 
 ## Documentation
 
-All planning, decisions, and design docs live in [`docs/plan/`](docs/plan/README.md).
-Start with the [implementation plan](docs/plan/00-implementation-plan.md).
+Human- and LLM-friendly references:
+
+- [Architecture](docs/architecture.md) — system design, components, safety model
+- [Usage](docs/usage.md) — commands, configuration, troubleshooting
+- [The run loop](docs/loop.md) — phases, gates, resume semantics
+- [Project status](docs/plan/PROJECT-STATUS.md) — where we stand and what's next
+
+Planning, decisions, and design history live in [`docs/plan/`](docs/plan/README.md).

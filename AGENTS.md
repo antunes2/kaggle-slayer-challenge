@@ -1,5 +1,15 @@
 # AGENTS.md
 
+## Start here (any new session)
+
+Read in this order before touching code — it saves burning tokens reading source:
+
+1. `docs/plan/PROJECT-STATUS.md` — where the project stands + next steps
+2. `docs/architecture.md` — system design (components, data flow, safety model)
+3. `docs/loop.md` — the 9-phase run loop, gates, resume semantics, event catalog
+4. `docs/usage.md` — CLI, config knobs, troubleshooting
+5. `docs/plan/README.md` — documentation conventions (questions/decisions/changes/designs)
+
 ## Workflow
 
 - **Never commit before user review.** Each implementation step: implement → present the
