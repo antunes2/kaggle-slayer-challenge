@@ -32,6 +32,7 @@ class EventType:
     ROADMAP_EXTENDED = "roadmap.extended"
     BLEND_EVALUATED = "blend.evaluated"
     SCOUT_DIGEST = "scout.digest"
+    EXTERNAL_DATA = "external.data"
 
 
 def llm_spend(journal: "Journal") -> float:

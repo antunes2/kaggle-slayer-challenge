@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v2.3 (all 9 phases live-proven; re-entry + blender live; 4.4 evidence-driven strategy — notebook scout + representation-first prompts — implemented) · **Updated:** 2026-10-22 · **Owner:** Gabriel
+> **Status:** v1.0 delivered (all phases live-proven on two competitions; limitations in `docs/limitations.md`) · **Updated:** 2026-10-22 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -29,7 +29,7 @@ only when you want to.*
 ## 3. Non-Goals (v1)
 
 - No GUI / web dashboard (terminal only).
-- No deep learning training (tabular-first: sklearn / LightGBM / CatBoost cover most of the top-20% space for tabular comps).
+- No deep learning training (tabular-first: sklearn / LightGBM / XGBoost / CatBoost) — confirmed by D0010 (hardware).
 - No multi-machine scaling — single machine, single process (v1).
 - No auto-selection of *which* competition to enter (user picks; auto-suggestion is v2+).
 
@@ -328,6 +328,7 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | 4.4 | Evidence-driven strategy ([C0004](changes/C0004-evidence-driven-strategy.md)): public-notebook scout → planner digest; generic representation-first prompts; paired-noise gate/reviewer wording; connection-blip retry budget; duplicate-blend fix | ✅ ([design](designs/15-notebook-scout.md); live test in progress) |
 | 4.5 | Paired-fold submission gate + reviewer re-review fix (skip candidates with a verdict; revise the best REVISE'd candidate first, with lineage) + `slayer competitions` browse command (Q0004 → D0008) | ✅ |
 | 4.6 | Delivery hardening: graceful Ctrl+C (Q0003 option 2 + harness kill), consolidated `docs/limitations.md`, README rewrite, repo cleanup | ✅ |
+| 4.7 | v1.0: external data (D0009), `slayer dashboard` (terminal + HTML), harness fixes (encoded positive class, probe = budget), D0010 | ✅ (external data not yet live-validated) |
 
 ## 12. Testing Strategy
 
@@ -362,6 +363,8 @@ Decisions are recorded as ADRs in [`decisions/`](decisions/); open questions liv
 | D6 | Model routing | Fast Gemini Flash tier default (D0006); free reasoning model as per-agent fallback | [D0006](decisions/D0006-model-routing-gemini-flash.md) |
 | D7 | Shortfall handling | Automatic bounded re-entry rounds (gate → REPLAN → ITERATE…MONITOR), ≤ `max_rounds` | [D0007](decisions/D0007-bounded-reentry-rounds.md) |
 | D8 | Competition discovery | `slayer competitions` browse command (filters); no picker, no auto-selection | [D0008](decisions/D0008-competition-browse-command.md) |
+| D9 | External data | Allowed: public Kaggle datasets from top notebooks; `auto` = Playground only; training folds only | [D0009](decisions/D0009-external-data-allowed.md) |
+| D10 | Deep learning | Out of scope — integrated-GPU laptop; revisit on GPU hardware | [D0010](decisions/D0010-deep-learning-out-of-scope.md) |
 
 **Open questions:** none (Q0003 settled for v1; residual risks in `docs/limitations.md`).
 

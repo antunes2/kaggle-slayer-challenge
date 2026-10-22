@@ -361,3 +361,12 @@ def test_replan_passes_cached_notebook_digest_as_untrusted_evidence(tmp_path) ->
     sent = llm.messages[0]
     assert "UNTRUSTED evidence" in sent
     assert "df['d'] = df['x'] // 10 % 10" in sent
+
+
+def test_replan_tells_planner_when_no_external_data_exists(tmp_path) -> None:
+    """Without a manifest the planner is told external data is unavailable."""
+    llm = FakeReplanLLM(RoadmapExtension(assessment="a", steps=[_step("X")]))
+    ctx = _make_ctx(tmp_path, llm=llm)
+    _position(ctx)
+    replan_phase(ctx)
+    assert "External data: NONE available" in llm.messages[0]

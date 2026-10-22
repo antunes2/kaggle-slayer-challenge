@@ -35,3 +35,5 @@ What this implies — including downsides we consciously accept.
 - [D0006 — Model routing: fast Gemini Flash tier as default](D0006-model-routing-gemini-flash.md)
 - [D0007 — Shortfall handling: automatic, bounded re-entry rounds](D0007-bounded-reentry-rounds.md)
 - [D0008 — Competition discovery: a browse command](D0008-competition-browse-command.md)
+- [D0009 — External data: allowed (public Kaggle datasets; auto = Playground only)](D0009-external-data-allowed.md)
+- [D0010 — Deep learning stays out of scope (hardware)](D0010-deep-learning-out-of-scope.md)

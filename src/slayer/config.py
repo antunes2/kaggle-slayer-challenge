@@ -9,6 +9,7 @@ AGENT_NAMES = ("orchestrator", "planner", "data_analyst", "ml_researcher", "revi
 DEFAULT_MODEL = "google/gemini-2.5-flash"
 
 AutonomyPolicy = Literal["approve-first", "agentic"]
+ExternalDataPolicy = Literal["auto", "on", "off"]
 
 
 class DefaultsConfig(BaseModel):
@@ -22,6 +23,9 @@ class DefaultsConfig(BaseModel):
     refresh_data: bool = False
     harness_timeout_s: int = Field(default=600, ge=30)
     max_rounds: int = Field(default=2, ge=0, le=10)
+    # auto = on for Playground competitions only (their rules typically allow public
+    # external data), off otherwise — D0009
+    external_data: ExternalDataPolicy = "auto"
 
 
 class PathsConfig(BaseModel):

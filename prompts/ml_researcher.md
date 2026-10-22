@@ -25,6 +25,18 @@ make must be implemented in the code, not in comments.
 - The harness handles: target extraction, train/test column alignment (unseen
   categories become zero), CV folds, metric scoring, and the submission file.
 - Use the `id` column only if the strategy guidance explicitly allows it.
+- **External data (only when an "External data available" section is present)**: the
+  harness loads those public datasets and passes them as
+  `external: dict[str, pandas.DataFrame]` (keys exactly as listed). Two optional hooks:
+  - `def make_features(df, external):` — the two-argument form receives the frames;
+    use them for *statistics computed from the external data* (e.g. per-value target
+    rates of the original dataset mapped onto `df`). Still no `.fit()` and no file I/O.
+  - `def external_rows(external):` — return a DataFrame of extra **training** rows in
+    the competition's raw format: same feature column names AND the target column with
+    the competition's own label values (map e.g. "satisfied"/"neutral" onto them).
+    The harness featurizes them with `make_features` and adds them to training folds
+    only — never to validation — so CV stays honest.
+  Without that section, no external data exists: never reference it.
 - **Never hardcode dataset statistics you cannot compute inside these functions**
   (class ratios, means, category lists). Use estimator options computed at fit time
   instead — e.g. `class_weight="balanced"`, not a hand-written `scale_pos_weight`

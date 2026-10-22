@@ -50,6 +50,9 @@ def run_candidate(
         "stratified": protocol.stratified,
         "budget_s": timeout_s,
     }
+    manifest = run.workspace("external") / "manifest.json"
+    if manifest.exists():
+        config["external_manifest"] = str(manifest.resolve())
     (candidate_dir / "cv_config.json").write_text(
         json.dumps(config, indent=2), encoding="utf-8"
     )

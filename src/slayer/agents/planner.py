@@ -15,6 +15,15 @@ def _digest_section(notebook_digest: str) -> str:
     )
 
 
+def _external_section(external_md: str) -> str:
+    """List the external datasets the pipelines may use (empty = none allowed)."""
+    if not external_md.strip():
+        return (
+            "External data: NONE available for this run — never plan ideas that need it.\n\n"
+        )
+    return f"{external_md}\n\n"
+
+
 class PlannerAgent(Agent):
     """Turns analysis artifacts into the per-competition StrategyPlan."""
 
@@ -27,6 +36,7 @@ class PlannerAgent(Agent):
         data_report_json: str,
         feature_plan_json: str,
         notebook_digest: str = "",
+        external_md: str = "",
     ) -> StrategyPlan:
         """Produce the strategy from competition context, data report, features, and digest."""
         user_message = (
@@ -37,6 +47,7 @@ class PlannerAgent(Agent):
             "Feature plan (JSON):\n"
             f"{feature_plan_json}\n\n"
             f"{_digest_section(notebook_digest)}"
+            f"{_external_section(external_md)}"
             "Produce the strategy plan."
         )
         _, plan = self.run_structured(user_message, StrategyPlan)
@@ -57,6 +68,7 @@ class PlannerExtensionAgent(Agent):
         constraints_md: str,
         round_number: int,
         notebook_digest: str = "",
+        external_md: str = "",
     ) -> RoadmapExtension:
         """Diagnose the shortfall and propose the next roadmap segment (or stop)."""
         user_message = (
@@ -70,6 +82,7 @@ class PlannerExtensionAgent(Agent):
             "Constraints for this round:\n"
             f"{constraints_md}\n\n"
             f"{_digest_section(notebook_digest)}"
+            f"{_external_section(external_md)}"
             "Produce the roadmap extension."
         )
         _, extension = self.run_structured(user_message, RoadmapExtension)

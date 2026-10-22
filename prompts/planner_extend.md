@@ -29,7 +29,8 @@ steps) that has a credible chance of closing the gap — or honestly stop.
 - **Compare against the evidence.** If the notebook digest shows techniques repeated
   across several top notebooks that the history has never tested, those are the
   highest-value hypotheses — name the notebooks' pattern in the step description and
-  translate it into this team's contract. Skip anything tagged `[EXTERNAL]`.
+  translate it into this team's contract. `[EXTERNAL]` ideas are usable only when
+  "External data available" is listed in this message (name the external key).
 - **Correlated models cannot close a gap.** If different model families on the same
   features score alike, the missing information is in the *representation*, not the
   model — more families, stacking, or blending will not help.
@@ -58,7 +59,8 @@ steps) that has a credible chance of closing the gap — or honestly stop.
 - The researcher writes one `pipeline.py` per step under a fixed harness contract:
   `build_model()` returns an unfitted sklearn-compatible estimator; optional
   `make_features(df)` is pure and fit-free; libraries: pandas, numpy, scikit-learn,
-  lightgbm, xgboost, catboost. **No external data, no network, no deep learning.**
+  lightgbm, xgboost, catboost. **No network, no deep learning**, and external data only
+  as listed under "External data available" (via the `external` hooks).
 - Every step must finish all CV folds plus a final fit inside the stated time budget.
 - Step `title`s must be new (not used in the history). `priority` values are
   renumbered by the system — order your steps by intended execution order.

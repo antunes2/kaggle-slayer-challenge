@@ -26,6 +26,7 @@ uv run slayer run playground-series-s6e9
 #   --submissions-per-day 4      stay under the kaggle quota
 #   --harness-timeout-s 1800    per-candidate CV time budget
 #   --max-rounds 2              re-entry rounds on target shortfall (0 disables)
+#   --external-data/--no-external-data   public datasets from top notebooks (default auto = Playground)
 #   --refresh-data              force redownload (data cache is per-competition)
 #   --config-dir / --env-file   overrides
 
@@ -41,6 +42,8 @@ uv run slayer competitions          # --search TEXT  --category playground|featu
 uv run slayer status                 # list runs (or one run's detail + LLM spend)
 uv run slayer journal <run_id>       # event timeline; --limit N
 uv run slayer leaderboard <comp>    # top-10 + our position
+uv run slayer dashboard             # every run: attempts, scores, position, spend
+#   --competition <ref>   --html report.html (self-contained report with charts)
 
 uv run slayer init                  # environment check
 ```
@@ -90,6 +93,7 @@ defaults:
   refresh_data: false
   harness_timeout_s: 1800   # per-candidate CV budget
   max_rounds: 2             # re-entry rounds on target shortfall (0 disables)
+  external_data: auto       # auto (Playground only) | on | off — D0009
 paths:
   runs_dir: runs
 llm:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import signal
 import sys
@@ -18,7 +19,7 @@ from sklearn.model_selection import KFold, StratifiedKFold
 from slayer.cv.metrics import ResolvedMetric, resolve_metric
 from slayer.schemas.cv import CVResult, FoldScore
 
-PROBE_OVERHEAD_FACTOR = 1.25
+PROBE_OVERHEAD_FACTOR = 1.0  # abort when the estimate exceeds the budget itself
 
 
 def _sha256_file(path: Path) -> str:
@@ -50,13 +51,27 @@ def _positive_class(y: pd.Series) -> object:
     return sorted(y.dropna().astype(str).unique())[-1]
 
 
+def _positive_column(model, positive) -> int:
+    """Column of predict_proba holding the positive class.
+
+    Models may expose encoded classes (XGBoost turns True/False or strings into 0/1);
+    for two classes the encoding follows sorted order, so the positive (sorted-last)
+    label is column 1.
+    """
+    classes = [str(c) for c in getattr(model, "classes_", [])]
+    if str(positive) in classes:
+        return classes.index(str(positive))
+    if len(classes) == 2:
+        return 1
+    raise ValueError(f"positive class {positive!r} not in model classes {classes}")
+
+
 def _fold_predictions(model, X_val, y_val, metric: ResolvedMetric, problem_type: str):
     """Predictions in the form the metric consumes (positive-class proba for binary AUC)."""
     if metric.needs_proba and problem_type == "binary_classification":
         if hasattr(model, "predict_proba"):
-            classes = [str(c) for c in model.classes_]
-            positive = _positive_class(y_val)
-            return model.predict_proba(X_val)[:, classes.index(str(positive))]
+            column = _positive_column(model, _positive_class(y_val))
+            return model.predict_proba(X_val)[:, column]
     if metric.needs_proba and hasattr(model, "predict_proba"):
         return model.predict_proba(X_val)
     return model.predict(X_val)
@@ -87,6 +102,77 @@ def _predict_submission(
     else:
         out[target_column] = model.predict(test)
     return out
+
+
+def _load_external(config: dict) -> dict[str, pd.DataFrame]:
+    """Load the run's external CSVs (D0009) keyed as in the manifest; {} when none."""
+    path = config.get("external_manifest")
+    if not path or not Path(path).exists():
+        return {}
+    manifest = json.loads(Path(path).read_text(encoding="utf-8"))
+    return {
+        entry["key"]: pd.read_csv(entry["path"])
+        for dataset in manifest.get("datasets", [])
+        for entry in dataset.get("files", [])
+        if Path(entry["path"]).exists()
+    }
+
+
+def _accepts_external(make_features) -> bool:
+    """Whether make_features takes a second `external` argument."""
+    try:
+        return len(inspect.signature(make_features).parameters) >= 2
+    except (TypeError, ValueError):
+        return False
+
+
+def _external_training_rows(
+    pipeline, external: dict, target_column: str, y: pd.Series, problem_type: str, featurize,
+    columns,
+) -> tuple[pd.DataFrame | None, pd.Series | None]:
+    """Rows from the pipeline's optional `external_rows(external)` hook, featurized.
+
+    Labels are mapped onto the competition's own label values (by string), so e.g.
+    "True"/"satisfied" mismatches fail loudly instead of silently corrupting `fit`.
+    """
+    hook = getattr(pipeline, "external_rows", None)
+    if hook is None or not external:
+        return None, None
+    rows = hook(external)
+    if rows is None or len(rows) == 0:
+        return None, None
+    if target_column not in rows.columns:
+        raise ValueError(f"external_rows() must include the target column '{target_column}'")
+    raw = rows[target_column]
+    if problem_type == "regression":
+        y_ext = pd.to_numeric(raw, errors="raise")
+    else:
+        labels = {str(value): value for value in y.dropna().unique()}
+        y_ext = raw.astype(str).map(labels)
+        unknown = sorted(set(raw.astype(str)[y_ext.isna()]))[:5]
+        if unknown:
+            raise ValueError(
+                f"external_rows() labels {unknown} are not competition labels "
+                f"{sorted(labels)} — map them to the competition's values"
+            )
+        y_ext = y_ext.astype(y.dtype)
+    X_ext = featurize(rows.drop(columns=[target_column])).reindex(columns=columns)
+    return X_ext.reset_index(drop=True), y_ext.reset_index(drop=True)
+
+
+def _fit_frames(X, y, train_idx, X_ext, y_ext):
+    """Training data for one fit: the fold's competition rows plus any external rows.
+
+    External rows are only ever appended to training data — validation folds and OOF
+    predictions contain competition rows exclusively, so CV stays honest.
+    """
+    X_fit, y_fit = X.iloc[train_idx], y.iloc[train_idx]
+    if X_ext is None:
+        return X_fit, y_fit
+    return (
+        pd.concat([X_fit, X_ext], ignore_index=True),
+        pd.concat([y_fit, y_ext], ignore_index=True),
+    )
 
 
 def _install_deadline(budget_s: float) -> None:
@@ -152,11 +238,23 @@ def _execute(config: dict, candidate_dir: Path) -> CVResult:
         pipeline = _load_pipeline(pipeline_path)
         y = train[target_column]
         X = train.drop(columns=[target_column])
+        external = _load_external(config)
         make_features = getattr(pipeline, "make_features", None)
-        if make_features is not None:
-            X = make_features(X)
-            test = make_features(test)
+
+        def featurize(frame: pd.DataFrame) -> pd.DataFrame:
+            """Apply the pipeline's make_features (passing external frames if accepted)."""
+            if make_features is None:
+                return frame
+            if _accepts_external(make_features):
+                return make_features(frame, external)
+            return make_features(frame)
+
+        X = featurize(X)
+        test = featurize(test)
         test = test.reindex(columns=X.columns, fill_value=0)
+        X_ext, y_ext = _external_training_rows(
+            pipeline, external, target_column, y, problem_type, featurize, X.columns
+        )
 
         splitter_cls = StratifiedKFold if config.get("stratified", True) else KFold
         splitter = splitter_cls(
@@ -168,7 +266,7 @@ def _execute(config: dict, candidate_dir: Path) -> CVResult:
         for i, (train_idx, val_idx) in enumerate(splitter.split(X, y)):
             fold_start = time.time()
             model = pipeline.build_model()
-            model.fit(X.iloc[train_idx], y.iloc[train_idx])
+            model.fit(*_fit_frames(X, y, train_idx, X_ext, y_ext))
             score, preds = _score_fold(
                 model, X.iloc[val_idx], y.iloc[val_idx], metric, problem_type
             )
@@ -205,7 +303,7 @@ def _execute(config: dict, candidate_dir: Path) -> CVResult:
         std = round((sum((s - mean) ** 2 for s in scores) / len(scores)) ** 0.5, 6)
 
         final_model = pipeline.build_model()
-        final_model.fit(X, y)
+        final_model.fit(*_fit_frames(X, y, np.arange(len(X)), X_ext, y_ext))
         out_frame = _predict_submission(
             final_model, test, target_column, submission, problem_type
         )
@@ -225,6 +323,7 @@ def _execute(config: dict, candidate_dir: Path) -> CVResult:
             std_score=std,
             higher_is_better=metric.higher_is_better,
             train_rows=len(train),
+            external_rows=0 if X_ext is None else len(X_ext),
             elapsed_s=round(time.time() - started, 2),
             pipeline_sha256=_sha256_file(pipeline_path),
             submission_sha256=_sha256_file(submission_path),

@@ -7,57 +7,35 @@
 
 *Updated: 2026-10-22 (4.6 — delivery hardening; v1.0 codebase, limitations documented)*
 
-## Where we are
+## Where we are — v1.0 delivered
 
-All 9 phases, re-entry rounds, the OOF blender, and now the **public-notebook scout**
-are implemented. The big lesson of the day (full evidence in
-[`changes/C0004`](changes/C0004-evidence-driven-strategy.md)): the bottleneck was
-**how the agents chose ideas**, not missing capabilities.
+*Updated: 2026-10-22.* Every planned v1 capability is implemented, tested (233 unit
+tests), documented, and live-proven on two competitions. Honest limits are in
+[`docs/limitations.md`](../limitations.md); the top-20% goal is **not** reached.
 
 | Milestone | Status |
 |---|---|
-| Phases 0-3 (infra, EDA, planning/baseline/review/submit, iteration, resume) | ✅ live |
-| Phase 2b — first real Kaggle submission (LB 0.94149, ≈ top 71%) | ✅ |
+| Phases 0-3: infra, EDA, planning/baseline/review/submit, iteration, resume | ✅ live |
 | 4.1 monitor · 4.2 re-entry rounds · 4.3 OOF blender + researcher A/B | ✅ live |
-| 4.4 notebook scout + evidence-driven prompts + retry hardening | ✅ (live test confirms direction) |
-| 4.5 paired-fold submission gate + reviewer re-review fix + `slayer competitions` | ✅ (unit-tested; not yet live) |
-| 4.6 graceful Ctrl+C, `docs/limitations.md`, README, cleanup | ✅ |
-| Phase 5 — daemon/attach/chat, agentic orchestrator | ⬜ (out of v1 scope) |
+| 4.4 notebook scout + evidence-driven prompts · 4.5 paired gate + review fix + `competitions` | ✅ live |
+| 4.6 graceful Ctrl+C, limitations doc, README · 4.7 external data, dashboard, harness fixes | ✅ (external data not yet live) |
+| Phase 5: daemon/attach/chat, agentic orchestrator | ⬜ out of v1 scope |
 
-## Live evidence (`playground-series-s6e9`, closed; target line 0.94640 = top 20%)
+## Live results
 
-| Run | What changed | Best CV | ≈ LB position |
-|---|---|---|---|
-| `20261022-001955` | gpt-5-mini researcher, generic prompts | 0.94183 (LB 0.94149) | top 71% (real LB) |
-| `20261022-031417` | claude-sonnet-5.5 researcher, 2 re-entry rounds, blender | 0.94200 | top 53% (CV-estimate) |
-| `…-031417-…-scout-test` | + notebook scout + evidence-driven prompts (1 round) | **0.94426** (2nd step; 1st: 0.94404) | ≈ top 45% |
+| Competition | Mode | Result |
+|---|---|---|
+| s6e9 (closed) | first real submission | LB 0.94149 ≈ top 71% (estimated) |
+| s6e9 | dry, after C0004 | best CV 0.94426 ≈ top 45% (CV-estimated) |
+| **s6e10 (active)** | live, 4 real submissions, 2 rounds, $0.80 | **LB 0.96015, rank 1240/2714 = top 45.7%**; gains came from OOF blends |
 
-- The new researcher model: 1 failure in 14 candidates (vs 3 + 1 stuck in 9);
-  CatBoost works; $0.56 per night.
-- Re-entry and blending work end-to-end but added ~nothing with generic ideas
-  (candidates were 0.998-correlated copies). The scout fixed the *idea* source.
-- Public notebooks reach CV ≈ 0.946; the top-20% line (0.9464) is reached there with
-  the original dataset, which our rules forbid (kept, by decision). Realistic goal for
-  this competition with current rules: ≈ top 30-40%.
+## Next steps (optional, post-delivery)
 
-## Known issues
-
-- Validated on **one** competition only (s6e9, binary AUC). Regression/multiclass paths
-  are unit-tested but never live; OOF blending supports binary-proba and regression only.
-- Harness assumes `train.csv` / `test.csv` / `sample_submission.csv`; other layouts fail.
-- A *hard* kill (not Ctrl+C) can still orphan a harness process (Q0003 residual).
-- Full, consolidated list: [`docs/limitations.md`](../limitations.md).
-- Generated code runs in the local venv (no docker sandbox yet).
-
-## Next steps (recommended order)
-
-1. **First live campaign on an active competition**: `playground-series-s6e10`
-   (Predicting Airline Satisfaction, ROC AUC, deadline 2026-10-31, 10/day). Accept the
-   rules at https://www.kaggle.com/competitions/playground-series-s6e10/rules, then
-   `uv run slayer run playground-series-s6e10 --live` (approve-first: you confirm each
-   real submission). Resume once per day until the deadline.
-2. A second, different competition (regression or multiclass) to prove generality.
-3. Phase 5 (daemon/attach/chat, agentic orchestrator) only after the above.
+1. Resume the s6e10 campaign daily until 2026-10-31 (fresh quota; first live test of
+   external data): `uv run slayer resume 20261022-142647-playground-series-s6e10 --max-rounds 3`
+   (raise the number each day).
+2. Improvement opportunities, ranked: [`docs/limitations.md` §8](../limitations.md).
+3. A regression or multiclass competition to prove generality further.
 
 ## Conventions for a new session
 

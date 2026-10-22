@@ -14,6 +14,7 @@ from slayer.cv import CandidateRunError, build_cv_protocol, run_candidate
 from slayer.kaggle import QuotaManager
 from slayer.loop.data import data_collection_phase
 from slayer.loop.engine import Handler, Phase, RunContext
+from slayer.loop.external import external_summary_md, load_manifest, prepare_external_data
 from slayer.schemas import CVResult, DataAnalystOutput, StrategyPlan
 from slayer.workspace import CandidateRecord, EventType, ModelCandidate, llm_spend
 
@@ -144,6 +145,8 @@ def planning_phase(ctx: RunContext) -> None:
     data_report_json = (reports_dir / "data_report.json").read_text(encoding="utf-8")
     feature_plan_json = (reports_dir / "feature_plan.json").read_text(encoding="utf-8")
     digest = notebook_digest(ctx)
+    manifest = prepare_external_data(ctx, digest)
+    target_column = json.loads(data_report_json).get("target_column")
 
     planner = PlannerAgent(
         llm=ctx.llm,
@@ -156,6 +159,7 @@ def planning_phase(ctx: RunContext) -> None:
         data_report_json=data_report_json,
         feature_plan_json=feature_plan_json,
         notebook_digest=digest,
+        external_md=external_summary_md(manifest, target_column),
     )
 
     evaluation_metric = json.loads(competition_json).get("evaluation_metric") or ""
@@ -282,6 +286,7 @@ def baseline_phase(ctx: RunContext) -> None:
         guidance=plan.guidance,
         roadmap_step=step,
         time_budget_s=ctx.run.harness_timeout_s,
+        external_md=external_summary_md(load_manifest(ctx), plan.target_column),
     )
     ctx.journal.append(
         agent="ml_researcher",
@@ -496,6 +501,7 @@ def iterate_phase(ctx: RunContext) -> None:
             roadmap_step=step,
             iteration_context=_iteration_context(ctx) + (f"\n\n{extra}" if extra else ""),
             time_budget_s=ctx.run.harness_timeout_s,
+            external_md=external_summary_md(load_manifest(ctx), plan.target_column),
         )
         ctx.journal.append(
             agent="ml_researcher",

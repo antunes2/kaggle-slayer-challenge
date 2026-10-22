@@ -19,6 +19,7 @@ class MLResearcherAgent(Agent):
         roadmap_step: RoadmapStep,
         iteration_context: str = "",
         time_budget_s: int | None = None,
+        external_md: str = "",
     ) -> PipelineProposal:
         """Generate the pipeline code for one roadmap step, with prior-run feedback."""
         guidance_text = "\n".join(f"- {g}" for g in guidance) or "- (none)"
@@ -47,6 +48,7 @@ class MLResearcherAgent(Agent):
             "Strategy guidance (mandatory):\n"
             f"{guidance_text}\n\n"
             f"{budget_section}"
+            f"{external_md + chr(10) + chr(10) if external_md else ''}"
             f"{context_section}"
             "Current roadmap step to implement (JSON):\n"
             f"{roadmap_step.model_dump_json(indent=2)}\n\n"

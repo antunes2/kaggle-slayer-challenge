@@ -201,6 +201,11 @@ def run(
     max_rounds: int = typer.Option(
         None, "--max-rounds", help="Re-entry rounds on target shortfall; 0 disables (default 2)"
     ),
+    external_data: bool = typer.Option(
+        None,
+        "--external-data/--no-external-data",
+        help="Use public Kaggle datasets found in top notebooks (default: auto = Playground)",
+    ),
 ) -> None:
     """Start the orchestration loop on a competition."""
     try:
@@ -218,6 +223,7 @@ def run(
             "harness_timeout_s": harness_timeout_s,
             "submissions_per_day": submissions_per_day,
             "max_rounds": max_rounds,
+            "external_data": None if external_data is None else ("on" if external_data else "off"),
         }.items()
         if value is not None
     }
@@ -492,6 +498,31 @@ def competitions(
             typer.echo(f"      {comp.title}")
     typer.echo("")
     typer.echo("Start one with: uv run slayer run <ref>   (accept its rules on kaggle.com first)")
+
+
+@app.command()
+def dashboard(
+    competition: str = typer.Option(None, "--competition", "-c", help="Only this competition"),
+    html_path: Path = typer.Option(
+        None, "--html", help="Also write a self-contained HTML report to this file"
+    ),
+    config_dir: Path = typer.Option(Path("config"), "--config-dir"),
+) -> None:
+    """Show attempts and scores across all runs (terminal table, optional HTML report)."""
+    from datetime import UTC, datetime
+
+    from slayer.dashboard import collect, render_html, render_terminal
+
+    cfg = load_slayer_config(config_dir / "slayer.yaml")
+    summaries = collect(RunStore(cfg.paths.runs_dir), competition)
+    if not summaries:
+        typer.echo("No runs yet — start one with: slayer run <competition>")
+        return
+    typer.echo(render_terminal(summaries))
+    if html_path is not None:
+        stamp = datetime.now(UTC).isoformat(timespec="seconds")
+        html_path.write_text(render_html(summaries, stamp), encoding="utf-8")
+        typer.secho(f"HTML report written: {html_path}", fg="green")
 
 
 @app.command()

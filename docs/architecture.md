@@ -32,7 +32,9 @@ Consequences you can rely on:
 
 ```
 src/slayer/
-├── cli/main.py        # typer app: run, resume, init, status, journal, leaderboard
+├── cli/main.py        # typer app: run, resume, init, status, journal, leaderboard,
+│                      # competitions, dashboard
+├── dashboard.py       # cross-run summaries → terminal table / self-contained HTML
 ├── config.py          # slayer.yaml + agents.yaml + .env → pydantic settings
 ├── llm/client.py      # OpenRouter client: retries (429-aware; long backoff on
 │                      # connection blips), JSON extraction,
@@ -44,7 +46,7 @@ src/slayer/
 ├── agents/            # Agent base (prompt + schema + journaling) + the five roles
 ├── loop/              # engine (phase machine + bounded re-entry rounds), phases (the
 │                      # 9 handlers), campaign (re-entry gate + REPLAN), blending
-│                      # (OOF blend step), data cache
+│                      # (OOF blend step), external (public datasets, D0009), data cache
 ├── cv/                # metric registry, the CV harness (sandboxed subprocess; persists
 │                      # OOF predictions), runner (timeout kill, partial results),
 │                      # blend (deterministic hill-climb over OOF)
@@ -93,6 +95,7 @@ Everything lands in runs/<run_id>/:
 ├── workspace/
 │   ├── data/           # competition CSVs + manifest.json
 │   ├── eda/            # profile.json / profile.md
+│   ├── external/       # public datasets (D0009) + manifest.json (sources, files, columns)
 │   ├── models/<cand>/  # pipeline.py, cv_config.json, cv_results.json, submission.csv, run.log,
 │   │                   # oof.npy + fold_ids.npy (blendable metrics); blends: blend.json
 │   └── reports/        # competition.json, data_report.json, feature_plan.json, strategy_plan.json,
@@ -124,7 +127,10 @@ is the highest-leverage model (A/B in `docs/plan/questions/Q0001`). How the agen
   SIGALRM self-deadline (best-effort), probe-fold early abort for pathological candidates.
 - **Untrusted external text**: the public-notebook digest is built by code, never
   executed, and framed to the planner as evidence, not instructions; ideas that need
-  external data are tagged `[EXTERNAL]` and excluded (pipelines read competition files only).
+  external data are tagged `[EXTERNAL]`.
+- **External data** (D0009): only public Kaggle datasets that top notebooks load;
+  `auto` = Playground only (rules can't be read by API); external rows join training
+  folds only, never validation.
 - **Secrets**: `.env` only (gitignored); never printed.
 
 ## Known limitations (honest)

@@ -7,6 +7,7 @@ defaults:
   refresh_data: false
   harness_timeout_s: 1800
   max_rounds: 2             # re-entry rounds on target shortfall (0 disables)
+  external_data: auto       # auto (Playground only) | on | off — public Kaggle datasets
 
 paths:
   runs_dir: runs

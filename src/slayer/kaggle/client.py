@@ -319,6 +319,46 @@ class KaggleClient:
         source = getattr(getattr(response, "blob", None), "source", "") or ""
         return _code_from_source(source)
 
+    def find_dataset(self, slug: str) -> str | None:
+        """Resolve a bare dataset slug (old /kaggle/input/<slug> paths) to 'owner/slug'."""
+        try:
+            datasets = self._api.dataset_list(search=slug) or []
+        except Exception as exc:
+            raise KaggleError(f"dataset search failed for {slug}: {exc}") from exc
+        for dataset in datasets:
+            ref = str(getattr(dataset, "ref", "") or "")
+            if ref.rsplit("/", 1)[-1] == slug:
+                return ref
+        return None
+
+    def dataset_files(self, ref: str) -> list[CompetitionFileInfo]:
+        """List a public dataset's files with sizes (read-only)."""
+        try:
+            response = self._api.dataset_list_files(ref)
+        except Exception as exc:
+            raise KaggleError(f"dataset file listing failed for {ref}: {exc}") from exc
+        files = list(getattr(response, "files", None) or [])
+        return [
+            CompetitionFileInfo(
+                name=str(getattr(f, "name", "")),
+                total_bytes=getattr(f, "total_bytes", None) or getattr(f, "size", None),
+            )
+            for f in files
+            if f is not None
+        ]
+
+    def download_dataset(self, ref: str, target_dir: Path) -> Path:
+        """Download and unzip a public dataset into target_dir."""
+        target_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self._api.dataset_download_files(
+                    ref, path=str(target_dir), unzip=True, quiet=True
+                )
+        except Exception as exc:
+            raise KaggleError(f"dataset download failed for {ref}: {exc}") from exc
+        return target_dir
+
     def download_leaderboard(self, competition: str, target_dir: Path) -> Path:
         """Download the full public leaderboard zip into target_dir."""
         target_dir.mkdir(parents=True, exist_ok=True)

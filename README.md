@@ -10,10 +10,12 @@ ideas and code; *code* computes every score, owns every gate, and journals every
 
 ## What it achieves (honestly)
 
-- Fully autonomous, resumable campaigns with real Kaggle submissions (live-proven).
-- On `playground-series-s6e9`: first real LB ≈ top 71%; best CV after the
-  evidence-driven upgrades ≈ top 45%. **The top-20% goal is not reached.** See
-  [docs/limitations.md](docs/limitations.md) before relying on it.
+- Fully autonomous, resumable campaigns with real Kaggle submissions, live-proven on
+  two competitions.
+- `playground-series-s6e10` (active, first live campaign, untouched config): 4 real
+  submissions, 2 re-entry rounds, **LB 0.96015 = rank 1240/2714 (top 45.7%)** for
+  about $0.80 of LLM spend. `s6e9`: first real LB ≈ top 71%, best CV later ≈ top 45%.
+- **The top-20% goal is not reached.** See [docs/limitations.md](docs/limitations.md).
 
 ## Quickstart
 
@@ -31,10 +33,21 @@ uv run slayer competitions                         # browse active competitions
 uv run slayer run <ref>                            # dry run first (mock submissions)
 uv run slayer run <ref> --live                     # real submissions; asks y/n for each
 uv run slayer status <run_id>                      # progress, spend, rounds, candidates
+uv run slayer dashboard --html report.html         # all attempts & scores (+ HTML report)
 uv run slayer resume <run_id>                      # continue (e.g. once a day for fresh quota)
 ```
 
 Ctrl+C pauses safely; `resume` continues where it stopped.
+
+## Challenge bonus features
+
+| Bonus feature | Where it lives |
+|---|---|
+| Agent that reviews the leaderboard and proposes a new plan | MONITOR reads the real leaderboard and computes the gap to the target line; the re-entry gate decides; **REPLAN** has the planner write a new roadmap from the full history, the gap, and the top public notebooks (`loop/campaign.py`, design 13) |
+| Dashboard reporting competition attempts and scores | `slayer dashboard`: terminal table of every run (candidates, failures, real/mock submissions, best CV/LB, position, spend); `--html` writes a self-contained report with per-run score charts (`dashboard.py`) |
+
+Beyond the brief: public-notebook scout (design 15), OOF hill-climb blender (design 14),
+external data (D0009), paired-fold submission gate, budget/quota/approval gates.
 
 ## Safety defaults
 
@@ -45,6 +58,7 @@ Ctrl+C pauses safely; `resume` continues where it stopped.
 | `submissions_per_day: 4` | daily cap, counted from the journal |
 | `budget_usd: 10` | LLM spend cap per run, cumulative across resumes |
 | `max_rounds: 2` | re-entry rounds when short of the target |
+| `external_data: auto` | public Kaggle datasets from top notebooks, Playground only (check other comps' rules) |
 
 ## Documentation
 

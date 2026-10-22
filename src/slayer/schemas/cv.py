@@ -30,6 +30,7 @@ class CVResult(BaseModel):
     std_score: float | None = None
     higher_is_better: bool = True
     train_rows: int = 0
+    external_rows: int = 0
     elapsed_s: float = 0.0
     pipeline_sha256: str | None = None
     submission_sha256: str | None = None

@@ -36,6 +36,7 @@ class Run(BaseModel):
     refresh_data: bool = False
     harness_timeout_s: int = 600
     max_rounds: int = 2
+    external_data: str = "auto"
     root: Path
 
     def workspace(self, name: str) -> Path:
@@ -93,6 +94,7 @@ class RunStore:
             refresh_data=defaults.refresh_data,
             harness_timeout_s=defaults.harness_timeout_s,
             max_rounds=defaults.max_rounds,
+            external_data=defaults.external_data,
             root=root,
         )
         self._save(run)

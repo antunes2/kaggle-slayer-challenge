@@ -181,3 +181,23 @@ def test_harness_aligns_test_columns_to_train(tmp_path):
 
 
 
+
+
+def test_positive_column_handles_encoded_classes() -> None:
+    """Bool/string labels vs a model exposing encoded 0/1 classes map to column 1."""
+    from types import SimpleNamespace
+
+    from slayer.cv.harness import _positive_column
+
+    assert _positive_column(SimpleNamespace(classes_=["No", "Yes"]), "Yes") == 1
+    assert _positive_column(SimpleNamespace(classes_=[True, False]), "True") == 0
+    assert _positive_column(SimpleNamespace(classes_=[0, 1]), "True") == 1
+    with pytest.raises(ValueError):
+        _positive_column(SimpleNamespace(classes_=[0, 1, 2]), "x")
+
+
+def test_probe_aborts_when_estimate_exceeds_budget() -> None:
+    """The probe no longer tolerates estimates above the budget (live: 6x302s > 1800s)."""
+    from slayer.cv import harness
+
+    assert harness.PROBE_OVERHEAD_FACTOR == 1.0

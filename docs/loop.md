@@ -48,7 +48,10 @@ Downloads the competition zip **or reuses the per-competition cache**
 First the **notebook scout** (design 15, no LLM): the competition's most-voted public
 notebooks are read via the official API and reduced to a capped digest
 (`reports/notebook_digest.md`, ~4k tokens, `[EXTERNAL]` lines tagged, refreshed when
-older than 12 h, `scout.digest` journaled; fail-soft). Then the planner agent →
+older than 12 h, `scout.digest` journaled; fail-soft). When the external-data policy
+allows (D0009; `auto` = Playground), datasets the digest's `[EXTERNAL]` lines load are
+downloaded (≤ 2, CSV, ≤ 500 MB) into `workspace/external/` + manifest (`external.data`)
+and summarised for the planner and researcher. Then the planner agent →
 `StrategyPlan`: confirmed problem type, CV shape (`k_folds`, seed, stratified), ordered
 **roadmap** (step 1 = simplest baseline; then hypotheses ordered by evidence —
 representation changes first, see C0004), `min_cv_improvement` submission gate (sized
@@ -59,7 +62,10 @@ the planner never decides physics. Unsupported metric → loud failure here.
 
 ### BASELINE — skip if roadmap step 1 has a non-failed candidate
 Researcher writes `pipeline.py` for roadmap step 1 → syntax-checked (fail fast) →
-harness. Failure raises (first candidate is fatal to a fresh run). More than 3
+harness. With external data, the harness passes the frames to the optional hooks
+`make_features(df, external)` / `external_rows(external)`; external rows are appended
+to training folds and the final fit only (labels mapped to competition values, loud
+failure otherwise). Failure raises (first candidate is fatal to a fresh run). More than 3
 attempts total → `exhausted 3 attempts`.
 
 ### ITERATE — the improvement loop (inside one phase)
@@ -175,4 +181,4 @@ with `cost_estimated` flag), `agent.output`, `candidate.added`,
 `candidate.status_changed` (carries `submission_id` for real submissions),
 `candidate.scored`, `candidate.lb_scored`, `submission.accepted` (real — quota),
 `submission.mocked`, `budget.warning`, `iterate.skipped`, `monitor.position`,
-`reentry.decision`, `roadmap.extended`, `blend.evaluated`, `scout.digest`.
+`reentry.decision`, `roadmap.extended`, `blend.evaluated`, `scout.digest`, `external.data`.
