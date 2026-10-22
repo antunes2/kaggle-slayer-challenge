@@ -65,6 +65,7 @@ class LLMClient:
         timeout_s: int = 180,
         max_retries: int = 3,
         retry_wait_s: float = 0.5,
+        rate_limit_wait_s: float = 15.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         """Configure the client with credentials, transport, and retry policy."""
@@ -75,6 +76,7 @@ class LLMClient:
         self._timeout_s = timeout_s
         self._max_retries = max_retries
         self._retry_wait_s = retry_wait_s
+        self._rate_limit_wait_s = rate_limit_wait_s
         self._transport = transport
         self._calls = 0
         self._tokens = 0
@@ -156,6 +158,7 @@ class LLMClient:
         }
         last_error: LLMError | None = None
         for attempt in range(self._max_retries + 1):
+            retry_after_s: float | None = None
             try:
                 with httpx.Client(timeout=self._timeout_s, transport=self._transport) as client:
                     r = client.post(
@@ -170,10 +173,21 @@ class LLMClient:
                 last_error = LLMError(
                     f"HTTP {r.status_code}: {snippet}", status_code=r.status_code
                 )
+                if r.status_code == 429:
+                    try:
+                        retry_after_s = float(r.headers.get("Retry-After", ""))
+                    except ValueError:
+                        retry_after_s = None
                 if not _retryable(r.status_code):
                     raise last_error
-            if attempt < self._max_retries and self._retry_wait_s > 0:
-                time.sleep(self._retry_wait_s * (2**attempt))
+            if attempt < self._max_retries:
+                wait = self._retry_wait_s * (2**attempt)
+                if last_error is not None and last_error.status_code == 429:
+                    wait = retry_after_s if retry_after_s is not None else max(
+                        wait, self._rate_limit_wait_s * (attempt + 1)
+                    )
+                if wait > 0:
+                    time.sleep(wait)
         assert last_error is not None
         raise last_error
 

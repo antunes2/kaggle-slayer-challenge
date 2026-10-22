@@ -137,6 +137,30 @@ def test_structured_output_schema_violation_raises():
     assert exc_info.value.raw == json.dumps({"decision": "approve", "confidence": "high"})
 
 
+def test_retry_on_429_honors_retry_after_header():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(
+                429,
+                headers={"Retry-After": "0"},
+                json={"error": {"message": "rate limited"}},
+            )
+        return httpx.Response(200, json=_response_payload())
+
+    client = LLMClient(
+        api_key="test-key",
+        transport=httpx.MockTransport(handler),
+        retry_wait_s=0.0,
+        rate_limit_wait_s=0.0,
+    )
+    response = client.complete([{"role": "user", "content": "hi"}], "test/model")
+    assert response.content == "ok"
+    assert len(calls) == 2
+
+
 def test_retry_on_429_then_success():
     calls = []
 
