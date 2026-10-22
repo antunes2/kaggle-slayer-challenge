@@ -65,15 +65,41 @@ BASELINE chooses to raise (first candidate failing the run is fatal), ITERATE re
 ## Retro
 
 Implemented as designed; validated with 5 phase tests (real harness subprocesses on
-synthetic data). Notes:
+synthetic data) — the repair-retry + CV-gate interplay fired correctly even in tests
+(noise-CV candidates were gate-blocked) — then **live-validated twice** on the real
+competition:
 
-- The repair-retry + CV-gate interplay surfaced a test-design lesson: on tiny synthetic
-  data, 2-fold AUC is wildly noisy (0.25!), and the submit gate *correctly* refused a
-  non-improving candidate — the gates fire in tests exactly as they will live.
-- Baseline and ITERATE now share `_evaluate_proposal()` — one code path for
-  register/write/compile-check/harness/record; BASELINE raises on failure (first
-  candidate failing is fatal), ITERATE repairs.
-- Review verdicts now journal their full `reasoning` — REVISE feedback is what the
-  next proposal's iteration context consumes (the self-improvement loop's fuel).
-- Live validation of a full iterate loop (3-5 roadmap steps × real CV) takes 15-40
-  minutes — deliberately deferred pending user approval (per the new AGENTS rule).
+Test-phase notes retained: baseline and ITERATE share `_evaluate_proposal()` (one code
+path); reviewer verdicts journal full `reasoning` — the self-improvement loop's fuel.
+
+### Live validation 1 (first full iterate loop)
+
+All loop machinery fired (repair, gates, review, pause) — but **zero net improvement**:
+every iteration candidate died on a systematic codegen bug. The upgraded researcher
+prompt pushed `category`-dtype handling (correct ML practice) without specifying
+*order* — the model converted to category dtype *before* arithmetic → TypeError, 9
+consecutive failures including repairs. Lesson: prompt knowledge must include
+execution-order rules, not just preferences. (Fixed: "category conversion is the LAST
+step of make_features"; also hardened the no-hardcoded-ratios rule.)
+
+### Live validation 2 (after prompt fix + resume)
+
+Resumed the run that a Gemini 429 rate limit had killed mid-iteration — resume skipped
+analysis/planning/baseline and continued from step 3 (the feature working exactly as
+built). Results across the 6-step roadmap (7 candidates):
+
+| candidate | step | CV | outcome |
+|-----------|------|-----|---------|
+| cand-0001 | baseline LightGBM raw | 0.94135 | scored |
+| cand-0002 | ratio features | 0.94159 | approved, **gate-blocked** (below submitted best) |
+| cand-0003 | interaction features | **0.94185** | **approved + mock-submitted** |
+| cand-0004 | encoding features | 0.94156 | scored (no gain) |
+| cand-0005/6 | CatBoost benchmark | — | **probe-fold aborted** (338s fold → ~2000s projected vs 600s budget) |
+| cand-0007 | tuning | 0.94169 | scored, within noise |
+
+**Measurable CV improvement 0.94135 → 0.94185** with every gate firing correctly at
+least once: repair-retry, probe-fold budget catch, CV-improvement gate (blocked two
+noise-level candidates), reviewer approve/revise honesty. Phase 3 acceptance met.
+
+Also surfaced live: OpenRouter 429s need provider-grade backoff — the LLM client now
+honors `Retry-After` and backs off 15/30/45s on rate limits instead of 0.5–4s.

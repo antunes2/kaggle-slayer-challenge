@@ -18,6 +18,7 @@ class MLResearcherAgent(Agent):
         guidance: list[str],
         roadmap_step: RoadmapStep,
         iteration_context: str = "",
+        time_budget_s: int | None = None,
     ) -> PipelineProposal:
         """Generate the pipeline code for one roadmap step, with prior-run feedback."""
         guidance_text = "\n".join(f"- {g}" for g in guidance) or "- (none)"
@@ -27,6 +28,15 @@ class MLResearcherAgent(Agent):
             if iteration_context
             else ""
         )
+        budget_section = ""
+        if time_budget_s:
+            per_fold_hint = max(1, time_budget_s // 6)
+            budget_section = (
+                f"Time budget: the harness must complete all CV folds plus one final "
+                f"fit within {time_budget_s}s total — a pipeline exceeding it FAILS. "
+                f"Keep a single fold well under ~{per_fold_hint}s; calibrate "
+                "n_estimators and preprocessing cost accordingly.\n\n"
+            )
         user_message = (
             "Dataset profile (exact column names and dtypes):\n"
             f"{profile_md}\n\n"
@@ -36,6 +46,7 @@ class MLResearcherAgent(Agent):
             f"{feature_plan_json}\n\n"
             "Strategy guidance (mandatory):\n"
             f"{guidance_text}\n\n"
+            f"{budget_section}"
             f"{context_section}"
             "Current roadmap step to implement (JSON):\n"
             f"{roadmap_step.model_dump_json(indent=2)}\n\n"
