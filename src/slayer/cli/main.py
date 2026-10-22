@@ -193,7 +193,7 @@ def run(
         None, "--refresh-data/--use-cache", help="Force a data redownload (default from config)"
     ),
     harness_timeout_s: int = typer.Option(
-        None, "--harness-timeout-s", help="Per-candidate CV time budget in seconds (default 600)"
+        None, "--harness-timeout-s", help="Per-candidate CV time budget, seconds (default: config)"
     ),
     submissions_per_day: int = typer.Option(
         None, help="Max Kaggle submissions per day (default from config)"

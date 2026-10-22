@@ -19,6 +19,9 @@ ideas and code; *code* computes every score, owns every gate, and journals every
 
 ## Quickstart
 
+**New here? Follow the step-by-step [Operator Guide](docs/guide.md)** — setup, API keys,
+first dry run, live campaign, daily resumes, reading results.
+
 ```bash
 uv sync
 cp .env.example .env              # fill OPENROUTER_API_KEY and KAGGLE_API_TOKEN
@@ -62,6 +65,7 @@ external data (D0009), paired-fold submission gate, budget/quota/approval gates.
 
 ## Documentation
 
+- [Operator Guide](docs/guide.md): step-by-step runbook (start here)
 - [Architecture](docs/architecture.md): components, data flow, safety model
 - [The run loop](docs/loop.md): phases, gates, resume semantics, events
 - [Usage](docs/usage.md): commands, configuration, troubleshooting

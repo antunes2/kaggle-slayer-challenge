@@ -1,7 +1,7 @@
 # Using Slayer
 
-> Practical guide for humans and LLM agents. Setup, commands, configuration, and
-> how to read what the system is doing.
+> Reference for humans and LLM agents: commands, configuration, troubleshooting.
+> For a step-by-step walkthrough start with the [Operator Guide](guide.md).
 
 ## Setup
 

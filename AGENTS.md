@@ -5,6 +5,7 @@
 Read in this order before touching code — it saves burning tokens reading source:
 
 1. `docs/plan/PROJECT-STATUS.md` — where the project stands + next steps
+   (operators: `docs/guide.md` is the step-by-step runbook)
 2. `docs/architecture.md` — system design (components, data flow, safety model)
 3. `docs/loop.md` — the 9-phase run loop, gates, resume semantics, event catalog
 4. `docs/usage.md` — CLI, config knobs, troubleshooting
