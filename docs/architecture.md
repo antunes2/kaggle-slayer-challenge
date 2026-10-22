@@ -39,7 +39,8 @@ src/slayer/
 ├── kaggle/            # KaggleClient (thin, defensive SDK wrapper), QuotaManager
 ├── analysis/          # deterministic profiler → profile.{json,md} + markdown renders
 ├── agents/            # Agent base (prompt + schema + journaling) + the five roles
-├── loop/              # engine (phase machine), phases (the 9 handlers), data cache
+├── loop/              # engine (phase machine + bounded re-entry rounds), phases (the
+│                      # 9 handlers), campaign (re-entry gate + REPLAN), data cache
 ├── cv/                # metric registry, the CV harness (sandboxed subprocess),
 │                      # runner (timeout kill, partial results)
 ├── submissions.py     # SubmissionSink: MockSink (default) | KaggleSink (real)
@@ -55,7 +56,9 @@ runs/<run_id>/         # artifacts (gitignored)
 Nine phases, in order, each a handler in `loop/phases.py`:
 
 ```
-INIT → DATA_COLLECTION → ANALYSIS → PLANNING → BASELINE → ITERATE → REVIEW → SUBMIT → MONITOR → finished
+INIT → DATA_COLLECTION → ANALYSIS → PLANNING → BASELINE → ITERATE → REVIEW → SUBMIT → MONITOR
+   then, while the re-entry gate allows (D0007, ≤ max_rounds):
+REPLAN → ITERATE → REVIEW → SUBMIT → MONITOR → … → finished
 ```
 
 - Deterministic gates; LLM decides *content* within a phase (ADR D0003).
@@ -64,7 +67,10 @@ INIT → DATA_COLLECTION → ANALYSIS → PLANNING → BASELINE → ITERATE → 
   repair-retry on failure, review + submit gates after each candidate, LLM budget
   stops, one post-loop repair for unactioned REVISE feedback.
 - MONITOR reads the real world back: LB scores for submitted candidates, position
-  vs the run's target percentile.
+  vs the run's target percentile, and the **score gap** to the target line.
+- Re-entry (`loop/campaign.py`): a deterministic gate (target unmet, rounds/budget
+  left, deadline allows, planner hasn't stopped) → REPLAN, where the planner extends
+  the roadmap from the full experiment history + gap, or stops the campaign.
 
 ## Data flow
 
@@ -90,7 +96,7 @@ Everything lands in runs/<run_id>/:
 | Agent | role | reads | writes |
 |---|---|---|---|
 | data_analyst | interprets the deterministic profile | profile.md, competition.json | DataReport, FeaturePlan |
-| planner | strategy for this competition | analyst outputs, competition | StrategyPlan (CV protocol, roadmap, gates, guidance) |
+| planner | strategy for this competition; re-entry roadmap extensions | analyst outputs, competition; history + gap (REPLAN) | StrategyPlan; RoadmapExtension |
 | ml_researcher | writes pipeline.py plugins | strategy + feedback from registry/reviews | PipelineProposal (code) |
 | reviewer | adversarial gate before submissions | candidate code + CV + guidance | ReviewVerdict (approve/reject/revise) |
 | orchestrator | reserved (Phase 5) | — | — |
@@ -103,7 +109,8 @@ is the highest-leverage model to upgrade (see `docs/plan/questions/Q0001`).
 - **Mock by default**: `dry_run: true` routes submissions to MockSink — zero quota risk.
 - **Approve-first default**: real submissions prompt y/n in the terminal; `agentic` skips.
 - **Quota**: `QuotaManager` counts real submissions per UTC day vs the configured cap.
-- **LLM budget**: cumulative client cost (real or catalog-estimated) stops ITERATE.
+- **LLM budget**: cumulative cost summed from the journal's `agent.call` events (real or
+  catalog-estimated) — survives resumes — stops ITERATE and blocks re-entry.
 - **Harness sandbox**: per-candidate subprocess, process-group SIGKILL on timeout,
   SIGALRM self-deadline (best-effort), probe-fold early abort for pathological candidates.
 - **Secrets**: `.env` only (gitignored); never printed.
@@ -114,5 +121,6 @@ is the highest-leverage model to upgrade (see `docs/plan/questions/Q0001`).
   if the parent is killed (live incident logged in `docs/plan/questions/Q0003`).
 - Ctrl+C leaves the run status `active` (graceful SIGINT → paused is open, Q0003).
 - MONITOR matches leaderboard entries by username/display-name heuristics.
-- Iterate re-entry on target shortfall is a decision, not yet a mechanism (step 4.2).
+- The CV harness keeps no OOF/test predictions, so cross-candidate blending is
+  impossible; ensembles must be built inside a single pipeline.
 - Single foreground process; daemon + attach + chat are Phase 5.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 
 from slayer.agents import DataAnalystAgent, MLResearcherAgent, PlannerAgent, ReviewerAgent
@@ -12,7 +13,7 @@ from slayer.kaggle import QuotaManager
 from slayer.loop.data import data_collection_phase
 from slayer.loop.engine import Handler, Phase, RunContext
 from slayer.schemas import CVResult, DataAnalystOutput, StrategyPlan
-from slayer.workspace import CandidateRecord, EventType, ModelCandidate
+from slayer.workspace import CandidateRecord, EventType, ModelCandidate, llm_spend
 
 
 def init_phase(ctx: RunContext) -> None:
@@ -295,12 +296,16 @@ def _iteration_context(ctx: RunContext) -> str:
     return "\n\n".join(parts)
 
 
+def run_spend(ctx: RunContext) -> float:
+    """LLM spend for the whole run: journal sum (survives resumes) or live client, if higher."""
+    cost = getattr(ctx.llm, "cost", None)
+    live = cost.total_usd if cost is not None else 0.0
+    return max(llm_spend(ctx.journal), live)
+
+
 def _budget_out(ctx: RunContext) -> bool:
     """Check the run's LLM budget; journal a warning and return True when exhausted."""
-    cost = getattr(ctx.llm, "cost", None)
-    if cost is None:
-        return False
-    used = cost.total_usd
+    used = run_spend(ctx)
     if used >= ctx.run.budget_usd:
         ctx.journal.append(
             agent="loop",
@@ -607,66 +612,110 @@ def _parse_score(raw: str | None) -> float | None:
         return None
 
 
-def _report_estimated_position(ctx: RunContext, rows, total: int, username: str) -> None:
-    """Report a would-be leaderboard position from our best recorded LB score.
+def _higher_is_better(ctx: RunContext, rows) -> bool:
+    """Metric direction from the strategy's CV protocol; fall back to leaderboard order."""
+    try:
+        plan, competition = _load_plan(ctx)
+        return build_cv_protocol(
+            competition.get("evaluation_metric") or "", plan.cv
+        ).higher_is_better
+    except Exception:
+        ranked = sorted((r for r in rows if r.score is not None), key=lambda r: r.rank)
+        return len(ranked) < 2 or ranked[0].score >= ranked[-1].score
 
-    Used when our entry is not listed (e.g. late submissions to a closed
-    competition are scored but never join the public leaderboard).
-    """
-    target = ctx.run.target_percentile
-    scored = [
-        record.lb_score
-        for record in ctx.registry.list()
-        if record.lb_score is not None and not record.submission_id.startswith("mock-")
+
+def _target_score(rows, target_percentile: int) -> float | None:
+    """Score of the leaderboard entry sitting exactly at the target percentile line."""
+    ranked = sorted((r for r in rows if r.score is not None), key=lambda r: r.rank)
+    if not ranked:
+        return None
+    index = max(1, math.floor(len(ranked) * target_percentile / 100)) - 1
+    return ranked[index].score
+
+
+def _best_own_score(ctx: RunContext, higher: bool) -> tuple[float | None, str]:
+    """Our best real LB score (basis 'lb'), else best CV as a proxy (basis 'cv')."""
+    lb = [
+        r.lb_score
+        for r in ctx.registry.list()
+        if r.lb_score is not None and not (r.submission_id or "").startswith("mock-")
     ]
-    if not scored or not rows:
-        ctx.say(
-            f"  leaderboard: username '{username}' not found among {total} entries "
-            "(no scored submission for this account on this competition?)"
-        )
-        ctx.journal.append(
-            agent="loop",
-            type=EventType.MONITOR_POSITION,
-            data={"entries_fetched": total, "our_entry": False},
-            run=ctx.run.run_id,
-        )
-        return
+    if lb:
+        return (max(lb) if higher else min(lb)), "lb"
+    cv = [r.cv_score for r in ctx.registry.list() if r.cv_score is not None]
+    if cv:
+        return (max(cv) if higher else min(cv)), "cv"
+    return None, "none"
 
-    scores = [row.score for row in rows if row.score is not None]
-    if not scores:
-        ctx.say(f"  leaderboard: {total} entries but no scores to compare against")
-        return
-    higher_is_better = rows[0].score is None or (
-        scores[0] >= scores[-1] if len(scores) > 1 else True
+
+def _report_position(ctx: RunContext, rows, username: str) -> None:
+    """Report our position vs target (listed, LB-estimated, or CV-estimated) plus the gap."""
+    target = ctx.run.target_percentile
+    total = len(rows)
+    higher = _higher_is_better(ctx, rows)
+    target_score = _target_score(rows, target)
+    username_lower = str(username).strip().lower()
+    our = next((row for row in rows if username_lower in row.member_usernames), None)
+
+    if our is not None:
+        rank, field, best, basis, ties = our.rank, total, our.score, "listed", None
+    else:
+        best, basis = _best_own_score(ctx, higher)
+        scores = [row.score for row in rows if row.score is not None]
+        if best is None or not scores:
+            ctx.say(
+                f"  leaderboard: username '{username}' not found among {total} entries "
+                "and no own score to estimate from"
+            )
+            ctx.journal.append(
+                agent="loop",
+                type=EventType.MONITOR_POSITION,
+                data={"entries_fetched": total, "our_entry": False},
+                run=ctx.run.run_id,
+            )
+            return
+        better = sum(1 for s in scores if (s > best if higher else s < best))
+        ties = sum(1 for s in scores if s == best)
+        rank, field = better + 1, total + 1
+
+    percentile = round(rank / field * 100, 2) if field else None
+    met = percentile is not None and percentile <= target
+    gap = None
+    if target_score is not None and best is not None:
+        gap = round((target_score - best) if higher else (best - target_score), 6)
+
+    if basis == "listed":
+        head = f"rank {rank}/{field} (top {percentile}%)"
+    else:
+        source = "best LB score" if basis == "lb" else "best CV (no real LB score yet)"
+        head = (
+            f"not listed — {source} {best:.5f} would rank ~{rank}/{field} "
+            f"(top {percentile}%), tie band of {ties}"
+        )
+    gap_text = (
+        f"; target line {target_score:.5f}, gap {gap:+.5f}" if gap is not None else ""
     )
-    best = max(scored) if higher_is_better else min(scored)
-    better = sum(1 for s in scores if s > best) if higher_is_better else sum(
-        1 for s in scores if s < best
-    )
-    ties = sum(1 for s in scores if s == best)
-    rank = better + 1
-    field = total + 1
-    percentile = round(rank / field * 100, 2)
-    met = percentile <= target
     ctx.say(
-        f"  leaderboard: not listed (late submission) — best LB score {best:.5f} "
-        f"would rank ~{rank}/{field} (top {percentile}%), tie band of {ties} — "
-        f"target top {target}%: " + ("MET" if met else "NOT met")
+        f"  leaderboard: {head} — target top {target}%: "
+        + ("MET" if met else "NOT met")
+        + gap_text
     )
+    data = {
+        "our_entry": basis == "listed",
+        "basis": basis,
+        "rank": rank,
+        "total": total,
+        "percentile": percentile,
+        "target_percentile": target,
+        "met": met,
+        "best_score": best,
+        "target_score": target_score,
+        "gap": gap,
+    }
+    if basis != "listed":
+        data["estimated"] = True
     ctx.journal.append(
-        agent="loop",
-        type=EventType.MONITOR_POSITION,
-        data={
-            "our_entry": False,
-            "estimated": True,
-            "best_lb_score": best,
-            "rank": rank,
-            "total": total,
-            "percentile": percentile,
-            "target_percentile": target,
-            "met": met,
-        },
-        run=ctx.run.run_id,
+        agent="loop", type=EventType.MONITOR_POSITION, data=data, run=ctx.run.run_id
     )
 
 
@@ -704,33 +753,7 @@ def monitor_phase(ctx: RunContext) -> None:
     rows = ctx.kaggle.full_leaderboard(
         ctx.run.competition, target_dir=ctx.run.workspace("reports")
     )
-    total = len(rows)
-    username_lower = str(username).strip().lower()
-    our = next((row for row in rows if username_lower in row.member_usernames), None)
-    if our is None:
-        _report_estimated_position(ctx, rows, total, username)
-        return
-    percentile = round(our.rank / total * 100, 2) if total else None
-    target = ctx.run.target_percentile
-    met = percentile is not None and percentile <= target
-    ctx.say(
-        f"  leaderboard: rank {our.rank}/{total} "
-        f"(top {percentile}%) — target top {target}%: "
-        + ("MET" if met else "NOT met")
-    )
-    ctx.journal.append(
-        agent="loop",
-        type=EventType.MONITOR_POSITION,
-        data={
-            "our_entry": True,
-            "rank": our.rank,
-            "total": total,
-            "percentile": percentile,
-            "target_percentile": target,
-            "met": met,
-        },
-        run=ctx.run.run_id,
-    )
+    _report_position(ctx, rows, username)
 
 
 HANDLERS: dict[Phase, Handler] = {

@@ -11,9 +11,16 @@
 init → data_collection → analysis → planning → baseline → iterate → review → submit → monitor
 ```
 
+then, while the re-entry gate allows (`ROUND_ORDER`, D0007):
+
+```
+replan → iterate → review → submit → monitor      (round N; phase.enter carries "round": N)
+```
+
 - Entering a phase journals `phase.enter` and streams `[phase] <name>`.
 - A phase that raises → run status `failed`, exception re-raised to the CLI.
-- All phases complete → `finished`.
+- REPLAN raising `CampaignStop` (planner stopped) ends the campaign → `finished`.
+- All phases complete and the gate says no → `finished`.
 - `resume` re-enters the same machine; phases skip their own completed work (below).
 
 ## Phase by phase
@@ -64,7 +71,8 @@ across all resumes**, counted from the registry):
 5. After the loop: one bounded repair for an unactioned REVISE verdict, if any.
 
 Budget: before every proposal, cumulative LLM cost ≥ `run.budget_usd` →
-`budget.warning` + stop iterating.
+`budget.warning` + stop iterating. Cumulative = journal sum of `agent.call.cost_usd`
+(max with the live client), so spend from earlier resumes counts.
 
 ### REVIEW
 Reviewer agent judges the best scored-but-unreviewed candidate (metric-direction
@@ -95,18 +103,41 @@ Reads the world back:
 2. Download the **full public leaderboard CSV** (authoritative: every team, with
    member usernames) — the paginated view API can't reach deep fields and the SDK's
    page-token printing is suppressed. Find our entry by username in the member list.
-   Not listed (e.g. **late submissions to a closed comp are scored but never join
-   the LB**) → compute an **estimated position** from our best recorded LB score:
-   `rank = entries strictly better + 1`, `percentile = rank / (total + 1)`, tie band
-   reported. Journal `monitor.position`, report met / NOT met vs `target_percentile`.
-   The CSV snapshot persists as `workspace/reports/leaderboard.csv`.
+   Not listed → compute an **estimated position**: `rank = entries strictly better + 1`,
+   `percentile = rank / (total + 1)`, tie band reported. The estimate's `basis` is
+   `lb` (best real LB score — e.g. **late submissions to a closed comp are scored but
+   never join the LB**) or `cv` (no real LB score yet — dry runs, pending scoring).
+3. **Gap signal**: `target_score` = score at rank `max(1, floor(total × target%))`;
+   `gap` = direction-aware shortfall of our best score (positive = short). Journal
+   `monitor.position` (`basis`, rank, percentile, met, best/target score, gap); report
+   met / NOT met. The CSV snapshot persists as `workspace/reports/leaderboard.csv`.
+
+### Re-entry gate (after every MONITOR)
+`decide_reentry` journals `reentry.decision` and stops on the first failing check:
+planner previously stopped → round cap (`rounds_done >= max_rounds`) → no position
+signal → target met → LLM budget spent → deadline in the future but closer than one
+harness budget (a passed deadline does not block). Otherwise: re-enter round N.
+
+### REPLAN (round phases only)
+The planner (re-entry prompt `prompts/planner_extend.md`) reads the current strategy,
+the full experiment history (every candidate; failures with their first error line),
+the position + gap with the gap/spread ratio, and the round constraints (budget left,
+time budget, observed fold time, deadline). Output `RoadmapExtension`: an assessment,
+1-4 new steps + optional guidance — merged by code (unique titles, priorities after
+the current max, guidance dedupe) into `strategy_plan.json`; the raw extension lands in
+`reports/roadmap_round_N.json`; `roadmap.extended` is journaled. Or `stop` with a
+reason → `CampaignStop`, final for the run. ITERATE then picks the new steps up as
+ordinary pending steps (same caps, repair, review, submit gates).
 
 ## Resume semantics
 
 Every expensive phase has a skip predicate; pending roadmap steps derive from the
 registry (`params.roadmap_step` + attempt cap). Resuming a finished run re-enters
-MONITOR (fresh leaderboard data). A failed baseline re-proposes — resume is the
-crash-repair path — until the 3-attempt cap.
+MONITOR (fresh leaderboard data) and then the re-entry gate — a finished-short run
+continues its campaign until a stop condition holds (`slayer resume --max-rounds N`
+raises the cap). A crash mid-round resumes naturally: the round's steps are already
+merged into `strategy_plan.json`, so the linear pass's ITERATE finishes them. A failed
+baseline re-proposes — resume is the crash-repair path — until the 3-attempt cap.
 
 ## Candidate lifecycle
 
@@ -119,9 +150,10 @@ proposed → scored → approved → submitted → (lb recorded by MONITOR)
 
 ## Journal event catalog
 
-`run.created`, `run.status_changed`, `phase.enter`, `loop.paused`,
-`competition.context`, `data.collected`, `agent.call` (tokens + cost, with
-`cost_estimated` flag), `agent.output`, `candidate.added`,
+`run.created`, `run.status_changed`, `run.settings_changed`, `phase.enter`,
+`loop.paused`, `competition.context`, `data.collected`, `agent.call` (tokens + cost,
+with `cost_estimated` flag), `agent.output`, `candidate.added`,
 `candidate.status_changed` (carries `submission_id` for real submissions),
 `candidate.scored`, `candidate.lb_scored`, `submission.accepted` (real — quota),
-`submission.mocked`, `budget.warning`, `iterate.skipped`, `monitor.position`.
+`submission.mocked`, `budget.warning`, `iterate.skipped`, `monitor.position`,
+`reentry.decision`, `roadmap.extended`.

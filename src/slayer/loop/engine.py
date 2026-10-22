@@ -25,6 +25,7 @@ class Phase(StrEnum):
     REVIEW = "review"
     SUBMIT = "submit"
     MONITOR = "monitor"
+    REPLAN = "replan"
 
 
 PHASE_ORDER: tuple[Phase, ...] = (
@@ -38,6 +39,33 @@ PHASE_ORDER: tuple[Phase, ...] = (
     Phase.SUBMIT,
     Phase.MONITOR,
 )
+
+# One re-entry round after a target shortfall (D0007).
+ROUND_ORDER: tuple[Phase, ...] = (
+    Phase.REPLAN,
+    Phase.ITERATE,
+    Phase.REVIEW,
+    Phase.SUBMIT,
+    Phase.MONITOR,
+)
+
+
+class CampaignStop(Exception):
+    """Raised by REPLAN when the planner declares the campaign exhausted."""
+
+    pass
+
+
+@dataclass
+class ReentryDecision:
+    """Outcome of the deterministic re-entry gate after MONITOR."""
+
+    reenter: bool
+    reason: str
+    round: int = 0
+
+
+Decider = Callable[["RunContext"], ReentryDecision]
 
 
 @dataclass
@@ -63,42 +91,93 @@ class RunContext:
 
 def _default_handlers() -> dict[Phase, Handler]:
     """Resolve the default phase handlers (lazy import to avoid cycles)."""
+    from slayer.loop.campaign import replan_phase
     from slayer.loop.phases import HANDLERS
 
-    return dict(HANDLERS)
+    return {**HANDLERS, Phase.REPLAN: replan_phase}
+
+
+def _default_decider() -> Decider:
+    """Resolve the default re-entry gate (lazy import to avoid cycles)."""
+    from slayer.loop.campaign import decide_reentry
+
+    return decide_reentry
 
 
 class LoopEngine:
     def __init__(
-        self, ctx: RunContext, handlers: Mapping[Phase, Handler] | None = None
+        self,
+        ctx: RunContext,
+        handlers: Mapping[Phase, Handler] | None = None,
+        decider: Decider | None = None,
     ) -> None:
-        """Wire the engine to a run context and (optionally) custom handlers."""
+        """Wire the engine to a run context, handlers, and (optionally) a re-entry gate.
+
+        With the default handler set the default re-entry gate is used; a custom
+        handler map runs re-entry rounds only when a decider is passed explicitly.
+        """
         self._ctx = ctx
-        self._handlers: dict[Phase, Handler] = (
-            dict(handlers) if handlers is not None else _default_handlers()
-        )
+        if handlers is None:
+            self._handlers: dict[Phase, Handler] = _default_handlers()
+            self._decider = decider or _default_decider()
+        else:
+            self._handlers = dict(handlers)
+            self._decider = decider
 
     def start(self) -> Run:
-        """Execute phases in order until pause, failure, or completion."""
+        """Execute the linear pass, then bounded re-entry rounds, until done/pause/failure."""
         self._ctx.run = self._ctx.store.update_status(self._ctx.run, RunStatus.ACTIVE)
         for phase in PHASE_ORDER:
             handler = self._handlers.get(phase)
             if handler is None:
                 return self._pause(f"'{phase.value}' phase arrives with the next milestone")
-            self._ctx.say(f"[phase] {phase.value}")
-            self._ctx.journal.append(
-                agent="loop",
-                type=EventType.PHASE_ENTER,
-                data={"phase": phase.value},
-                run=self._ctx.run.run_id,
-            )
-            try:
-                handler(self._ctx)
-            except Exception as exc:
-                self._fail(exc)
-                raise
+            self._run_phase(phase, handler)
+        if self._decider is not None:
+            self._run_rounds()
         self._ctx.say("[done] all phases completed")
         return self._ctx.store.update_status(self._ctx.run, RunStatus.FINISHED)
+
+    def _run_phase(self, phase: Phase, handler: Handler, round_number: int | None = None) -> None:
+        """Announce, journal, and execute one phase; mark the run failed on errors."""
+        label = phase.value if round_number is None else f"{phase.value} (round {round_number})"
+        self._ctx.say(f"[phase] {label}")
+        data: dict = {"phase": phase.value}
+        if round_number is not None:
+            data["round"] = round_number
+        self._ctx.journal.append(
+            agent="loop", type=EventType.PHASE_ENTER, data=data, run=self._ctx.run.run_id
+        )
+        try:
+            handler(self._ctx)
+        except CampaignStop:
+            raise
+        except Exception as exc:
+            self._fail(exc)
+            raise
+
+    def _run_rounds(self) -> None:
+        """Re-enter REPLAN → … → MONITOR while the gate allows (hard-capped by max_rounds)."""
+        executed = 0
+        while True:
+            decision = self._decider(self._ctx)
+            if not decision.reenter:
+                self._ctx.say(f"[campaign] no re-entry: {decision.reason}")
+                return
+            if executed >= self._ctx.run.max_rounds:
+                self._ctx.say("[campaign] round cap reached in this invocation")
+                return
+            executed += 1
+            self._ctx.say(f"[round {decision.round}] re-entering: {decision.reason}")
+            try:
+                for phase in ROUND_ORDER:
+                    handler = self._handlers.get(phase)
+                    if handler is None:
+                        self._ctx.say(f"[campaign] no '{phase.value}' handler — rounds disabled")
+                        return
+                    self._run_phase(phase, handler, decision.round)
+            except CampaignStop as stop:
+                self._ctx.say(f"[campaign] planner stopped the campaign: {stop}")
+                return
 
     def _pause(self, reason: str) -> Run:
         """Pause the run at the first unimplemented phase."""

@@ -1,4 +1,4 @@
-from slayer.workspace.journal import EventType, Journal, JournalEvent
+from slayer.workspace.journal import EventType, Journal, JournalEvent, llm_spend
 from slayer.workspace.registry import (
     CandidateRecord,
     CandidateRegistry,
@@ -18,4 +18,5 @@ __all__ = [
     "Run",
     "RunStatus",
     "RunStore",
+    "llm_spend",
 ]

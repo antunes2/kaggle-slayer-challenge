@@ -20,7 +20,7 @@ from slayer.kaggle import KaggleClient, KaggleError
 from slayer.llm import LLMClient, LLMError
 from slayer.loop import DataCollectionError, LoopEngine, RunContext
 from slayer.submissions import KaggleSink, MockSink
-from slayer.workspace import EventType, RunStatus, RunStore
+from slayer.workspace import EventType, RunStatus, RunStore, llm_spend
 
 app = typer.Typer(add_completion=False, help="Slayer — a team of agents that competes on Kaggle.")
 
@@ -198,6 +198,9 @@ def run(
     submissions_per_day: int = typer.Option(
         None, help="Max Kaggle submissions per day (default from config)"
     ),
+    max_rounds: int = typer.Option(
+        None, "--max-rounds", help="Re-entry rounds on target shortfall; 0 disables (default 2)"
+    ),
 ) -> None:
     """Start the orchestration loop on a competition."""
     try:
@@ -214,6 +217,7 @@ def run(
             "refresh_data": refresh_data,
             "harness_timeout_s": harness_timeout_s,
             "submissions_per_day": submissions_per_day,
+            "max_rounds": max_rounds,
         }.items()
         if value is not None
     }
@@ -240,8 +244,11 @@ def resume(
     run_id: str = typer.Argument(..., help="Run id to resume"),
     config_dir: Path = typer.Option(Path("config"), "--config-dir"),
     env_file: Path = typer.Option(Path(".env"), "--env-file"),
+    max_rounds: int = typer.Option(
+        None, "--max-rounds", help="Raise/lower the run's re-entry round cap (persisted)"
+    ),
 ) -> None:
-    """Resume a paused or failed run, skipping completed phases."""
+    """Resume a paused, failed, or finished run, skipping completed phases."""
     cfg = load_slayer_config(config_dir / "slayer.yaml")
     store = RunStore(cfg.paths.runs_dir)
     try:
@@ -249,6 +256,11 @@ def resume(
     except KeyError as exc:
         typer.secho(str(exc), fg="red")
         raise typer.Exit(1) from exc
+    if max_rounds is not None:
+        if not 0 <= max_rounds <= 10:
+            typer.secho("--max-rounds must be between 0 and 10", fg="red")
+            raise typer.Exit(1)
+        run = store.update_settings(run, max_rounds=max_rounds)
     typer.secho(f"resuming run {run.run_id} (status: {run.status})", bold=True)
     _execute_run(config_dir=config_dir, env_file=env_file, run=run)
 
@@ -338,7 +350,7 @@ def status(
     if phases:
         typer.echo(f"  phases:      {' -> '.join(str(p) for p in phases if p)}")
     paused = journal.read(type=EventType.LOOP_PAUSED)
-    if paused:
+    if paused and run.status == RunStatus.PAUSED:
         typer.echo(f"  paused:      {paused[-1].data.get('reason')}")
     agent_calls = journal.read(type=EventType.AGENT_CALL)
     priced = [
@@ -346,12 +358,22 @@ def status(
         for event in agent_calls
         if event.data.get("cost_usd") is not None
     ]
-    spend = sum(priced)
+    spend = llm_spend(journal)
     pricing_note = "" if priced else " (free/unpriced model)"
     typer.echo(
         f"  llm spend:   ${spend:.4f} / ${run.budget_usd:.2f} budget "
         f"({len(agent_calls)} calls{pricing_note})"
     )
+    extensions = [
+        e for e in journal.read(type=EventType.ROADMAP_EXTENDED)
+        if e.data.get("steps_added", 0) > 0
+    ]
+    typer.echo(f"  rounds:      {len(extensions)} / {run.max_rounds} re-entry rounds")
+    decisions = journal.read(type=EventType.REENTRY_DECISION)
+    if decisions:
+        last = decisions[-1].data
+        verb = "re-entered" if last.get("reenter") else "stopped"
+        typer.echo(f"  campaign:    {verb} — {last.get('reason')}")
     records = store.registry(run).list()
     if records:
         by_status: dict[str, int] = {}

@@ -8,7 +8,7 @@ from slayer.schemas.analysis import (
 from slayer.schemas.cv import CVProtocol, CVResult, FoldScore
 from slayer.schemas.researcher import PipelineProposal
 from slayer.schemas.review import ReviewVerdict
-from slayer.schemas.strategy import CVSettings, RoadmapStep, StrategyPlan
+from slayer.schemas.strategy import CVSettings, RoadmapExtension, RoadmapStep, StrategyPlan
 
 __all__ = [
     "CVProtocol",
@@ -22,6 +22,7 @@ __all__ = [
     "PipelineProposal",
     "ProblemType",
     "ReviewVerdict",
+    "RoadmapExtension",
     "RoadmapStep",
     "StrategyPlan",
 ]

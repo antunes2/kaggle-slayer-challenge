@@ -21,6 +21,7 @@ class DefaultsConfig(BaseModel):
     dry_run: bool = True
     refresh_data: bool = False
     harness_timeout_s: int = Field(default=600, ge=30)
+    max_rounds: int = Field(default=2, ge=0, le=10)
 
 
 class PathsConfig(BaseModel):

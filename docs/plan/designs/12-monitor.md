@@ -25,7 +25,8 @@ and report both.
 3. **Engine completion** — with MONITOR implemented, `PHASE_ORDER` is fully
    implemented: the run reaches `FINISHED` (resume re-enters MONITOR for fresh data).
    Deliberately *no automatic re-entry* in v1: MONITOR senses and reports; re-entry
-   (iterate-more on shortfall) is a decision organ — see step 4.2 / Q0005.
+   (iterate-more on shortfall) is a decision organ — see step 4.2 / Q0005, implemented
+   in [design 13](13-reentry-rounds.md).
 
 ## Percentile semantics
 

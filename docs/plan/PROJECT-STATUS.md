@@ -5,65 +5,70 @@
 > structure: `docs/architecture.md` (system), `docs/loop.md` (phases),
 > `docs/usage.md` (operating). Master plan: `docs/plan/00-implementation-plan.md`.
 
-*Updated: 2026-10-22 (post leaderboard-fix session)*
+*Updated: 2026-10-22 (step 4.2 — bounded re-entry rounds)*
 
 ## Where we are
 
 The full pipeline is **implemented and live-proven end-to-end**: all 9 engine phases,
 the five agents, the CV harness sandbox, resume, monitoring. A real Kaggle submission
-has been made and accepted.
+has been made and scored. Step 4.2 adds the "act on falling short" mechanism —
+implemented and unit-tested, **not yet live-validated**.
 
 | Milestone | Status |
 |---|---|
 | Phase 0 — infrastructure (config, LLM client, kaggle client, journal/registry) | ✅ |
 | Phase 1 — data collection + EDA | ✅ live |
 | Phase 2 — planner/researcher/reviewer, mock submission end-to-end | ✅ live |
-| Phase 2b — first real Kaggle submission | ✅ closed: submission `57503219` accepted, real LB score **0.94149** recorded via description matching; full-LB position: **~2545/3577 (top 71.15%), tie band 19 — target top-20% NOT met** (late submissions to a closed comp are scored but not listed; MONITOR estimates position by score) |
-| Phase 3 — iteration engine, resume, timeout handling | ✅ live (CV 0.94135 → 0.94185 in one pass) |
-| Phase 4 — monitoring (4.1 done: LB collection + percentile-vs-target; 4.2 open) | 🔶 |
+| Phase 2b — first real Kaggle submission | ✅ submission `57503219`, LB **0.94149** → est. ~2545/3577 (**top 71%**) — target top-20% NOT met |
+| Phase 3 — iteration engine, resume, timeout handling | ✅ live |
+| Phase 4 — monitoring (4.1 LB + position; 4.2 gap signal + bounded re-entry rounds) | ✅ (4.2 live validation pending) |
 | Phase 5 — daemon/attach/chat, agentic orchestrator | ⬜ |
 
 ## Live evidence (closed playground comp `playground-series-s6e9`)
 
 - ~668k rows; the loop runs **baseline → 5-6 roadmap candidates → reviews →
   (mock or real) submission → monitor** unattended.
-- CV improvement in one pass: **0.94135 → 0.94185**; every gate fired correctly at
-  least once live (repair-retry, probe-fold budget abort, CV gate, reviewer
-  approve/revise honesty, quota separation).
-- Real-world placement of the submitted score: **~top 50 percentile** of the
-  leaderboard — short of the top-20% goal. That gap is *by design* the job of
-  step 4.2 (iterate re-entry) + Phase 5: more iterations, ensembles (XGBoost was
-  only added to the toolbox late — no run has used it yet), seed averaging,
-  and a better researcher model (see below).
+- **The gap, quantified** (leaderboard snapshot, 3576 teams): top-20% line = **0.94640**;
+  our best LB = 0.94149 → **gap +0.0049 AUC**. All scored candidates span 0.94147–0.94183
+  CV (spread 0.00035, below fold std 0.0008) → **gap/spread ≈ 14×**: more of the same
+  steps cannot close it. The top ~30% are packed within 0.0006 of each other with a
+  cliff below — typical of a structural unlock most serious teams found.
+- **CatBoost never landed** (4 attempts, 3 distinct contract errors: category dtype,
+  raw strings, a wrapper without `classes_`) — so the run never had a working second
+  family, and its "Ensemble" step was a 16-minute in-pipeline refit.
+- That run's calls predate cost journaling (status shows $0 — not a live bug).
+
+## What 4.2 does (design 13, D0007)
+
+After MONITOR, a deterministic gate re-enters `REPLAN → ITERATE → REVIEW → SUBMIT →
+MONITOR` while the target is unmet and rounds (`max_rounds`, default 2) / budget /
+deadline allow. REPLAN shows the planner the full history (failures with error lines),
+the **gap vs spread** ratio, and round constraints; it appends 1-4 new steps or stops.
+Dry runs estimate the position from CV (`basis: cv`). The LLM budget is now summed from
+the journal, so it holds across resumes. Verified offline against the real run's
+artifacts: the gate re-enters with `gap +0.00491`, ratio 13.9×.
 
 ## Known issues (all documented)
 
-- `docs/plan/questions/Q0003` — Ctrl+C leaves run status `active` (graceful SIGINT
-  pending); orphaned harness processes can outlive their budget if the parent is
-  killed during a long C fit (live incident: 84 min at 600% CPU).
-- `Q0004` — competition discovery UX (`slayer competitions` browse command proposed).
-- Monitor leaderboard matching is username/display-name heuristic.
-- Iterate re-entry on target shortfall is not yet a mechanism (step 4.2).
+- `Q0003` — Ctrl+C leaves run status `active` (graceful SIGINT pending); orphaned
+  harness processes can outlive their budget if the parent is killed mid C fit.
+- `Q0004` — competition discovery UX (`slayer competitions` proposed).
+- Harness keeps no OOF/test predictions → no cross-candidate blending.
+- Monitor leaderboard matching is username heuristic.
 
 ## Next steps (recommended order)
 
-1. **Step 4.2 — deadline awareness + iterate re-entry** (the "deal with falling
-   short" mechanism): when MONITOR reports percentile > target and budget/quota/
-   deadline allow, let the planner write a *new* roadmap segment from the registry's
-   experiment history (what's been tried, what worked) and re-enter ITERATE. Also:
-   graceful SIGINT (Q0003.2) and possibly the `slayer competitions` command (Q0004).
-2. **Researcher model A/B (Q0001 note)** — the next session intends to run with a
-   better model. Change **only `ml_researcher`** in `config/agents.yaml` first
-   (strong reasoning model, e.g. `anthropic/claude-sonnet-4.5` or a frontier
-   OpenAI/Gemini model); measure: CV trajectory, failed-candidate count, repair
-   cycles, vs. the recorded baselines above. ~$1-3 per run vs. $10 budget.
-   Watch: max_tokens may need raising for reasoning models; 429 backoff already
-   handles rate limits.
-3. **First active-competition campaign** once an appealing Playground episode opens
-   (or pick another active tabular comp): fresh `--live` run, approve-first;
-   then Phase 4.2's re-entry makes it a multi-day campaign within quota.
-4. **Phase 5** when the above is boring: daemon + `attach`, `slayer chat`,
-   agentic orchestrator upgrade, docker sandboxing.
+1. **Live-validate 4.2** (needs user go-ahead): `slayer resume 20261022-001955-…` on
+   the finished run — re-entry kicks in from its real LB gap; dry-run by default. Watch:
+   does the planner's assessment use the gap/spread signal and propose structural
+   steps; do round steps land (especially a working CatBoost)?
+2. **OOF persistence + deterministic blender** — harness saves OOF/test predictions;
+   a code-owned hill-climb blend over scored candidates (typically +0.001–0.003 on
+   playgrounds; makes "ensemble" steps cheap and reliable).
+3. **Researcher model A/B** — change only `ml_researcher` in `config/agents.yaml`;
+   compare failed-candidate count (CatBoost contract errors are codegen quality).
+4. Graceful SIGINT (Q0003.2), `slayer competitions` (Q0004) — small ops steps.
+5. **Phase 5** — daemon + `attach`, `slayer chat`, agentic orchestrator.
 
 ## Conventions for a new session
 
@@ -71,6 +76,4 @@ has been made and accepted.
   docstrings on every function; phase-completion reports with risks/opportunities).
 - `docs/plan/README.md` explains question/decision/change/design records — update
   them as you go; keep `00-implementation-plan.md` statuses current.
-- Checks before presenting any step: `uv run pytest -q` (169 green as of this
-  writing) and `uv run ruff check .`.
-- Working tree state: clean; everything through the monitor fixes is committed.
+- Checks before presenting any step: `uv run pytest -q` and `uv run ruff check .`.

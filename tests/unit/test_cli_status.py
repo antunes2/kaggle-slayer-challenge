@@ -93,6 +93,25 @@ def test_status_no_runs(tmp_path) -> None:
     assert "No runs yet" in result.output
 
 
+def test_status_shows_rounds_and_hides_stale_pause(tmp_path) -> None:
+    """Finished runs show campaign rounds/decision and no leftover 'paused' line."""
+    run = _make_run(tmp_path, "comp-x")
+    store = RunStore(tmp_path / "runs")
+    journal = store.journal(run)
+    journal.append(agent="loop", type=EventType.LOOP_PAUSED, data={"reason": "old pause"})
+    journal.append(agent="planner", type=EventType.ROADMAP_EXTENDED,
+                   data={"round": 1, "steps_added": 2})
+    journal.append(agent="loop", type=EventType.REENTRY_DECISION,
+                   data={"reenter": False, "reason": "round cap reached (1/2)"})
+    store.update_status(run, "finished")
+
+    result = runner.invoke(app, ["status", run.run_id, "--config-dir", str(_config_dir(tmp_path))])
+    assert result.exit_code == 0
+    assert "old pause" not in result.output
+    assert "rounds:      1 / 2 re-entry rounds" in result.output
+    assert "campaign:    stopped — round cap reached (1/2)" in result.output
+
+
 def test_journal_shows_events(tmp_path) -> None:
     run = _make_run(tmp_path, "comp-x")
     result = runner.invoke(

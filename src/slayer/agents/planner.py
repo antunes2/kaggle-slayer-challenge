@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from slayer.agents.base import Agent
-from slayer.schemas import StrategyPlan
+from slayer.schemas import RoadmapExtension, StrategyPlan
 
 
 class PlannerAgent(Agent):
@@ -25,6 +25,37 @@ class PlannerAgent(Agent):
         )
         _, plan = self.run_structured(user_message, StrategyPlan)
         return plan
+
+
+class PlannerExtensionAgent(Agent):
+    """The planner in re-entry mode: extends the roadmap from the experiment history."""
+
+    name = "planner"
+    prompt_file = "planner_extend"
+
+    def extend(
+        self,
+        strategy_md: str,
+        history_md: str,
+        position_md: str,
+        constraints_md: str,
+        round_number: int,
+    ) -> RoadmapExtension:
+        """Diagnose the shortfall and propose the next roadmap segment (or stop)."""
+        user_message = (
+            f"Re-entry round {round_number}. The run is short of its target.\n\n"
+            "Current strategy:\n"
+            f"{strategy_md}\n\n"
+            "Full experiment history (every candidate so far):\n"
+            f"{history_md}\n\n"
+            "Leaderboard position and gap:\n"
+            f"{position_md}\n\n"
+            "Constraints for this round:\n"
+            f"{constraints_md}\n\n"
+            "Produce the roadmap extension."
+        )
+        _, extension = self.run_structured(user_message, RoadmapExtension)
+        return extension
 
 
 def render_strategy_plan_md(plan: StrategyPlan) -> str:

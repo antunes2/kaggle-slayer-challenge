@@ -106,6 +106,36 @@ def test_resume_skips_completed_phases_and_finishes(tmp_path, monkeypatch) -> No
     assert records[0].status == "submitted"
 
 
+def test_resume_max_rounds_is_persisted(tmp_path, monkeypatch) -> None:
+    """--max-rounds on resume updates run.json and journals the change."""
+    config_dir, run = _prepare(tmp_path, monkeypatch)
+    env = tmp_path / ".env"
+    env.write_text(
+        "KAGGLE_API_TOKEN=tok123456789012345\nOPENROUTER_API_KEY=key123456789012345\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        app,
+        ["resume", run.run_id, "--max-rounds", "5", "--config-dir", str(config_dir),
+         "--env-file", str(env)],
+    )
+    assert result.exit_code == 0
+    store = RunStore(tmp_path / "runs")
+    assert store.get(run.run_id).max_rounds == 5
+    changes = store.journal(run).read(type="run.settings_changed")
+    assert changes[-1].data == {"max_rounds": {"from": 2, "to": 5}}
+
+
+def test_resume_rejects_out_of_range_max_rounds(tmp_path, monkeypatch) -> None:
+    """An invalid round cap exits before touching the run."""
+    config_dir, run = _prepare(tmp_path, monkeypatch)
+    result = runner.invoke(
+        app, ["resume", run.run_id, "--max-rounds", "99", "--config-dir", str(config_dir)]
+    )
+    assert result.exit_code == 1
+    assert "between 0 and 10" in result.output
+
+
 def test_resume_unknown_run_fails(tmp_path, monkeypatch) -> None:
     """A bad run id exits with an error."""
     config_dir, _ = _prepare(tmp_path, monkeypatch)

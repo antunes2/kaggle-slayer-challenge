@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v2.1 (all 9 phases + robustness fixes; run 20261022-001955 awaiting one resume to record its real LB score and finish) · **Updated:** 2026-10-21 · **Owner:** Gabriel
+> **Status:** v2.2 (all 9 phases live-proven; first real submission scored; step 4.2 bounded re-entry rounds implemented, live validation pending) · **Updated:** 2026-10-22 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -273,9 +273,9 @@ runs/                      # run artifacts (gitignored)
 | **0. Foundation** | infra only | config loading; OpenRouter client w/ JSON mode + cost tracking; KaggleClient wrapper; journal + run store; `slayer init` | `slayer init` pings both APIs green; journal round-trip unit-tested | ✅ |
 | **1. Data collection & EDA** | INIT → DATA_COLLECTION → ANALYSIS | loop engine + `slayer run <comp>`; download + safe unzip + manifest; profiler + data analyst → `DataReport` | Real comp: data on disk, human-readable EDA report in `reports/` | ✅ |
 | **2. Baseline & first submission (mocked)** | PLANNING → BASELINE → REVIEW → SUBMIT | CV harness; planner `StrategyPlan`; researcher pipeline codegen; reviewer gate; `SubmissionSink` abstraction (**MockSink** for MVP); submission approval flow | End-to-end pipeline completes with submission recorded via MockSink; approval + quota logic exercised; zero real quota spent | ✅ |
-| **2b. First live submission** | go live *(re-sequenced after Phase 3, C0003)* | fresh `--live` run on the closed playground (user-confirmed submission under approve-first) | Real submission accepted by Kaggle; score recorded in journal | 🔶 |
+| **2b. First live submission** | go live *(re-sequenced after Phase 3, C0003)* | fresh `--live` run on the closed playground (user-confirmed submission under approve-first) | Real submission accepted by Kaggle; score recorded in journal | ✅ (submission `57503219`, LB 0.94149) |
 | **3. Iteration engine & resilience** | the heart | experiment loop (propose → run → review → submit per roadmap step, with repair-retry); budget enforcement; `slayer resume`; harness timeout handling (Q0002) | ≥5 sequential iterations with measurable CV improvement; interrupted run resumes without redoing completed phases | ✅ |
-| **4. Monitoring & leaderboard** | MONITOR + ops | MONITOR phase (LB-score collection + percentile-vs-target awareness); `leaderboard` command; deadline awareness; iterate re-entry decision | Real LB scores recorded in the registry; position vs target reported from a live run | 🔶 |
+| **4. Monitoring & leaderboard** | MONITOR + ops | MONITOR phase (LB-score collection + percentile-vs-target awareness); `leaderboard` command; deadline awareness; iterate re-entry decision | Real LB scores recorded in the registry; position vs target reported from a live run | ✅ (4.2 live validation pending) |
 | **5. Autonomy & polish** | UX depth | daemon + `attach`; `slayer chat` REPL; richer live view; agentic orchestrator upgrade (dynamic replanning); cost report | User can steer a live run via chat; top-20% achieved on target comp | ⬜ |
 
 Phases 0–2 form the **MVP slice**: every architectural piece exists but shallow (all
@@ -323,7 +323,7 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 |------|-------|--------|
 | 4.1 | MONITOR phase: real LB-score collection for submitted candidates (registry `record_submission`), percentile-vs-target position reporting; `slayer leaderboard` command | ✅ ([design](designs/12-monitor.md)) |
 | 4.1b | Robustness fixes from the live resume: bounded step retries (max 3 attempts/step across resumes), CatBoost/XGBoost prompt contracts, cost estimation fallback (budget enforcement was inert), iteration terminal narration | ✅ |
-| 4.2 | Deadline awareness + iterate re-entry decision on target shortfall (decision organ; question doc pending) | ⬜ |
+| 4.2 | Deadline awareness + bounded iterate re-entry on target shortfall (D0007): score-gap signal + CV-basis position proxy in MONITOR, deterministic re-entry gate, REPLAN (planner roadmap extension from full history), journal-based cumulative LLM budget, `--max-rounds` | ✅ ([design](designs/13-reentry-rounds.md); live validation pending) |
 
 ## 12. Testing Strategy
 
@@ -356,8 +356,10 @@ Decisions are recorded as ADRs in [`decisions/`](decisions/); open questions liv
 | D4 | MVP target | Playground Series tabular competition (Phases 0–2b); real comp from Phase 3 | [D0004](decisions/D0004-mvp-target-playground-competition.md) |
 | D5 | Storage | Event-sourced: JSONL journal (events + agent blackboard + source of truth) + SQLite candidate registry (entity state, rebuildable from journal) | [D0005](decisions/D0005-storage-journal-and-sqlite-registry.md) |
 | D6 | Model routing | Fast Gemini Flash tier default (D0006); free reasoning model as per-agent fallback | [D0006](decisions/D0006-model-routing-gemini-flash.md) |
+| D7 | Shortfall handling | Automatic bounded re-entry rounds (gate → REPLAN → ITERATE…MONITOR), ≤ `max_rounds` | [D0007](decisions/D0007-bounded-reentry-rounds.md) |
 
-**Open questions:** *(none — Q0001 settled by D0006.)*
+**Open questions:** [Q0003](questions/Q0003-interruption-safety.md) (graceful SIGINT
+still open), [Q0004](questions/Q0004-competition-discovery-ux.md) (discovery UX).
 
 ## 15. Documentation Conventions (`docs/plan/`)
 

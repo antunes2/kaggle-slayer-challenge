@@ -34,3 +34,4 @@ What we lean toward and why; when to revisit.
 - [Q0002 — How should the harness handle slow or pathological candidates?](Q0002-harness-timeout-handling.md)
 - [Q0003 — What happens when the CLI is stopped mid-run?](Q0003-interruption-safety.md)
 - [Q0004 — How does the user pick a competition?](Q0004-competition-discovery-ux.md)
+- [Q0005 — How does the run act on falling short of the target?](Q0005-iterate-reentry-on-shortfall.md) (settled → D0007)

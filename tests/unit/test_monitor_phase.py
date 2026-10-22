@@ -83,8 +83,11 @@ def test_monitor_records_pending_lb_score(tmp_path) -> None:
     assert record.submission_id == "57503219"
     assert ctx.journal.read(type=EventType.CANDIDATE_LB)
     assert any("LB score 0.94212" in m for m in messages)
-    assert any("not listed (late submission)" in m for m in messages)
+    assert any("not listed — best LB score 0.94212" in m for m in messages)
     assert any("would rank ~2/2" in m for m in messages)
+    position = ctx.journal.read(type=EventType.MONITOR_POSITION)[-1].data
+    assert position["basis"] == "lb"
+    assert position["estimated"] is True
 
 
 def test_monitor_skips_unscored_and_mock_submissions(tmp_path) -> None:
@@ -126,11 +129,15 @@ def test_monitor_reports_position_vs_target(tmp_path) -> None:
     position = ctx.journal.read(type=EventType.MONITOR_POSITION)
     assert position[0].data == {
         "our_entry": True,
+        "basis": "listed",
         "rank": 2,
         "total": 2,
         "percentile": 100.0,
         "target_percentile": 20,
         "met": False,
+        "best_score": 0.94212,
+        "target_score": 0.95,
+        "gap": 0.00788,
     }
 
 
@@ -195,3 +202,53 @@ def test_monitor_matches_submissions_by_description(tmp_path) -> None:
     assert updated.lb_score == 0.94183
     assert updated.submission_id == "57503219"
     assert any("LB score 0.94183" in m for m in messages)
+
+
+def _field(n: int = 10) -> list:
+    """A descending-score leaderboard of n teams: 0.950, 0.949, ..."""
+    return [_Entry(i + 1, f"team-{i}", round(0.950 - i * 0.001, 3)) for i in range(n)]
+
+
+def test_monitor_reports_gap_to_target_line(tmp_path) -> None:
+    """The target line is the score at rank floor(total * target%); gap is direction-aware."""
+    kaggle = FakeMonitorKaggle(
+        submissions=[_Sub("57503219", "COMPLETE", "0.9425")], entries=_field(10)
+    )
+    ctx = _make_ctx(tmp_path, kaggle, target=20)
+    messages: list[str] = []
+    ctx.reporter = messages.append
+
+    monitor_phase(ctx)
+
+    position = ctx.journal.read(type=EventType.MONITOR_POSITION)[-1].data
+    assert position["target_score"] == 0.949
+    assert position["gap"] == 0.0065
+    assert position["met"] is False
+    assert any("target line 0.94900, gap +0.00650" in m for m in messages)
+
+
+def test_monitor_uses_cv_proxy_without_real_lb(tmp_path) -> None:
+    """Dry runs (mock LB only) estimate the position from best CV, flagged basis=cv."""
+    store = RunStore(tmp_path / "runs")
+    run = store.create("comp-x", DefaultsConfig())
+    registry = store.registry(run)
+    record = registry.add(ModelCandidate(model_type="lightgbm"))
+    registry.record_cv(record.id, 0.9455, 0.001)
+    registry.record_lb(record.id, 0.9999, "mock-cand-0001")
+    ctx = RunContext(
+        run=run,
+        journal=store.journal(run),
+        registry=registry,
+        kaggle=FakeMonitorKaggle(entries=_field(10)),
+        store=store,
+    )
+    messages: list[str] = []
+    ctx.reporter = messages.append
+
+    monitor_phase(ctx)
+
+    position = ctx.journal.read(type=EventType.MONITOR_POSITION)[-1].data
+    assert position["basis"] == "cv"
+    assert position["best_score"] == 0.9455
+    assert position["rank"] == 6
+    assert any("best CV (no real LB score yet)" in m for m in messages)

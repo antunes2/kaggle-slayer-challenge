@@ -11,6 +11,7 @@ class EventType:
 
     RUN_CREATED = "run.created"
     RUN_STATUS = "run.status_changed"
+    RUN_UPDATED = "run.settings_changed"
     PHASE_ENTER = "phase.enter"
     LOOP_PAUSED = "loop.paused"
     COMPETITION_CONTEXT = "competition.context"
@@ -27,6 +28,17 @@ class EventType:
     MONITOR_POSITION = "monitor.position"
     USER_GUIDANCE = "user.guidance"
     BUDGET_WARNING = "budget.warning"
+    REENTRY_DECISION = "reentry.decision"
+    ROADMAP_EXTENDED = "roadmap.extended"
+
+
+def llm_spend(journal: "Journal") -> float:
+    """Total LLM cost (USD) journaled by agent calls — cumulative across resumes."""
+    return sum(
+        float(event.data["cost_usd"])
+        for event in journal.read(type=EventType.AGENT_CALL)
+        if isinstance(event.data.get("cost_usd"), (int, float))
+    )
 
 
 class JournalEvent(BaseModel):

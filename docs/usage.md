@@ -25,11 +25,14 @@ uv run slayer run playground-series-s6e9
 #   --budget-usd 10             LLM spend cap for the run
 #   --submissions-per-day 4      stay under the kaggle quota
 #   --harness-timeout-s 1800    per-candidate CV time budget
+#   --max-rounds 2              re-entry rounds on target shortfall (0 disables)
 #   --refresh-data              force redownload (data cache is per-competition)
 #   --config-dir / --env-file   overrides
 
-# Continue a paused/failed/finished run without redoing completed phases
+# Continue a paused/failed/finished run without redoing completed phases;
+# a finished-short run continues its campaign (re-entry gate)
 uv run slayer resume <run_id>
+#   --max-rounds N              raise/lower the run's round cap (persisted)
 
 # Observability
 uv run slayer status                 # list runs (or one run's detail + LLM spend)
@@ -50,9 +53,16 @@ uv run slayer init                  # environment check
 [phase] iterate         one candidate per roadmap step; repair-retry; review+submit
 [phase] review          reviewer agent gates the best unreviewed candidate
 [phase] submit          CV-gate → quota-gate → approval-gate → sink
-[phase] monitor         real LB scores; position vs target percentile
+[phase] monitor         real LB scores; position vs target percentile; gap to target line
+[campaign] / [round N]   re-entry gate: target unmet + rounds/budget left → round N:
+[phase] replan (round 1) planner extends the roadmap from history + gap (or stops)
+[phase] iterate (round 1) … review → submit → monitor, then the gate again
 [done] all phases completed  → run status: finished
 ```
+
+Re-entry also runs on dry runs: with no real LB score, MONITOR estimates the position
+from the best **CV** (`basis: cv`), so a mock campaign exercises the full loop. Set
+`--max-rounds 0` for a single pass.
 
 Quiet stretches are normal: `cand-000N: evaluating (5 folds, budget 1800s) — silence
 during CV is normal` means a sandboxed harness is training models. Failures print the
@@ -75,6 +85,7 @@ defaults:
   dry_run: true            # mock submissions by default — going live is explicit
   refresh_data: false
   harness_timeout_s: 1800   # per-candidate CV budget
+  max_rounds: 2             # re-entry rounds on target shortfall (0 disables)
 paths:
   runs_dir: runs
 llm:
@@ -99,16 +110,20 @@ reviewer: {temperature: 0.0}          # adversarial, deterministic
 
 Prompts live in `prompts/*.md` — editing them changes agent behavior immediately;
 they are version-controlled like code (and most behavioral lessons live in them).
+`prompts/planner_extend.md` is the planner's re-entry prompt (same model routing as
+`planner`).
 
 ## Reading a run
 
-- `slayer status <id>` — phase history, pause reason, LLM spend vs budget, candidates
-  by lifecycle state, latest CV.
+- `slayer status <id>` — phase history, pause reason (paused runs only), LLM spend vs
+  budget (journal-summed, across resumes), re-entry rounds + last campaign decision,
+  candidates by lifecycle state, latest CV.
 - `slayer journal <id>` — every event: agent calls (with tokens/cost), phase
-  transitions, review verdicts, submissions, monitor positions.
+  transitions, review verdicts, submissions, monitor positions, re-entry decisions.
 - Artifacts under `runs/<id>/workspace/` — `reports/strategy_plan.md` (what the agents
-  decided), `eda/profile.md` (the data), `models/<cand>/pipeline.py` + `cv_results.json`
-  (what they built and how it scored).
+  decided, including appended re-entry steps), `reports/roadmap_round_N.json` (each
+  round's assessment + steps), `eda/profile.md` (the data), `models/<cand>/pipeline.py`
+  + `cv_results.json` (what they built and how it scored).
 
 ## Troubleshooting
 

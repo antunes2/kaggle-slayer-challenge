@@ -35,6 +35,7 @@ class Run(BaseModel):
     dry_run: bool
     refresh_data: bool = False
     harness_timeout_s: int = 600
+    max_rounds: int = 2
     root: Path
 
     def workspace(self, name: str) -> Path:
@@ -91,6 +92,7 @@ class RunStore:
             dry_run=defaults.dry_run,
             refresh_data=defaults.refresh_data,
             harness_timeout_s=defaults.harness_timeout_s,
+            max_rounds=defaults.max_rounds,
             root=root,
         )
         self._save(run)
@@ -126,6 +128,18 @@ class RunStore:
             agent="system",
             type=EventType.RUN_STATUS,
             data={"from": run.status, "to": status},
+            run=run.run_id,
+        )
+        return updated
+
+    def update_settings(self, run: Run, **changes) -> Run:
+        """Persist changed run settings (e.g. max_rounds on resume) and journal them."""
+        updated = run.model_copy(update=changes)
+        self._save(updated)
+        self.journal(updated).append(
+            agent="system",
+            type=EventType.RUN_UPDATED,
+            data={key: {"from": getattr(run, key), "to": value} for key, value in changes.items()},
             run=run.run_id,
         )
         return updated
