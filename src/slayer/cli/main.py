@@ -340,6 +340,18 @@ def status(
     paused = journal.read(type=EventType.LOOP_PAUSED)
     if paused:
         typer.echo(f"  paused:      {paused[-1].data.get('reason')}")
+    agent_calls = journal.read(type=EventType.AGENT_CALL)
+    priced = [
+        event.data["cost_usd"]
+        for event in agent_calls
+        if event.data.get("cost_usd") is not None
+    ]
+    spend = sum(priced)
+    pricing_note = "" if priced else " (free/unpriced model)"
+    typer.echo(
+        f"  llm spend:   ${spend:.4f} / ${run.budget_usd:.2f} budget "
+        f"({len(agent_calls)} calls{pricing_note})"
+    )
     records = store.registry(run).list()
     if records:
         by_status: dict[str, int] = {}

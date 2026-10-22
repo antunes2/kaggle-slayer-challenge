@@ -71,7 +71,7 @@ class FakeIterateLLM:
 
     def complete_structured(self, messages, model, response_model, **kwargs):
         """Serve canned proposals or the verdict."""
-        self.proposal_calls.append({})
+        self.proposal_calls.append(response_model)
         from slayer.schemas import PipelineProposal as PP
         from slayer.schemas import ReviewVerdict as RV
 
@@ -192,4 +192,71 @@ def test_iterate_no_pending_steps_makes_no_calls(tmp_path) -> None:
     iterate_phase(ctx)
 
     assert llm.proposal_calls == []
-    assert any("nothing to iterate" in m for m in messages)
+    assert any("no pending roadmap steps" in m for m in messages)
+
+
+def _seed_full_registry(ctx) -> None:
+    """Give every roadmap step a scored candidate so nothing is pending."""
+    for record in ctx.registry.list():
+        ctx.registry.set_status(record.id, "approved")
+    extra = ctx.registry.add(
+        ModelCandidate(model_type="lightgbm", params={"roadmap_step": "Boosted trees",
+                                                       "priority": 2})
+    )
+    ctx.registry.record_cv(extra.id, 0.94, 0.001)
+
+
+def _write_revise_verdict(ctx, candidate_id: str) -> None:
+    """Journal a REVISE verdict for the given candidate."""
+    ctx.journal.append(
+        agent="reviewer",
+        type=EventType.AGENT_OUTPUT,
+        data={
+            "candidate_id": candidate_id,
+            "decision": "revise",
+            "risk_flags": ["scale_pos_weight hardcoded"],
+            "reasoning": "use class_weight=balanced instead",
+        },
+        run=ctx.run.run_id,
+    )
+
+
+def test_iterate_acts_on_revise_feedback_once(tmp_path) -> None:
+    """A REVISE verdict on a scored candidate triggers exactly one revision proposal."""
+    llm = FakeIterateLLM([_proposal(GOOD_CODE)])
+    ctx = _make_ctx(tmp_path, llm)
+    _seed_full_registry(ctx)
+    scored = [r for r in ctx.registry.list() if r.status == "scored"][0]
+    (ctx.run.workspace("models") / scored.id).mkdir(parents=True, exist_ok=True)
+    (ctx.run.workspace("models") / scored.id / "pipeline.py").write_text(
+        GOOD_CODE, encoding="utf-8"
+    )
+    _write_revise_verdict(ctx, scored.id)
+    messages: list[str] = []
+    ctx.reporter = messages.append
+
+    iterate_phase(ctx)
+
+    from slayer.schemas import PipelineProposal
+    assert llm.proposal_calls.count(PipelineProposal) == 1
+    assert any(f"acting on REVISE feedback for {scored.id}" in m for m in messages)
+    assert any("revision cand-" in m and "scored:" in m for m in messages)
+    assert len(ctx.registry.list()) == 3
+
+
+def test_iterate_skips_revision_when_last_verdict_is_approve(tmp_path) -> None:
+    """An APPROVE verdict triggers no revision work."""
+    llm = FakeIterateLLM([])
+    ctx = _make_ctx(tmp_path, llm)
+    _seed_full_registry(ctx)
+    ctx.journal.append(
+        agent="reviewer",
+        type=EventType.AGENT_OUTPUT,
+        data={"candidate_id": ctx.registry.list()[0].id, "decision": "approve",
+              "risk_flags": [], "reasoning": "ok"},
+        run=ctx.run.run_id,
+    )
+
+    iterate_phase(ctx)
+
+    assert llm.proposal_calls == []

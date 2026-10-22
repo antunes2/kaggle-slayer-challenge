@@ -307,6 +307,62 @@ def _budget_out(ctx: RunContext) -> bool:
     return False
 
 
+def _pending_revision(ctx: RunContext):
+    """Return (record, verdict) for a scored candidate with an unactioned REVISE verdict."""
+    verdicts = ctx.journal.read(type=EventType.AGENT_OUTPUT, agent="reviewer")
+    if not verdicts:
+        return None
+    latest = verdicts[-1].data
+    if latest.get("decision") != "revise":
+        return None
+    candidate_id = latest.get("candidate_id")
+    if not candidate_id:
+        return None
+    try:
+        record = ctx.registry.get(candidate_id)
+    except KeyError:
+        return None
+    if record.status != "scored":
+        return None
+    return record, latest
+
+
+def _run_revision(ctx: RunContext, plan: StrategyPlan, protocol, propose) -> None:
+    """Act once on the latest REVISE feedback: propose, evaluate, re-review, re-gate."""
+    revision = _pending_revision(ctx)
+    if revision is None:
+        return
+    record, verdict = revision
+    if _budget_out(ctx):
+        return
+    step = next(
+        (s for s in plan.roadmap if s.title == record.params.get("roadmap_step")), None
+    )
+    if step is None:
+        return
+    pipeline_path = ctx.run.workspace("models") / record.id / "pipeline.py"
+    code = pipeline_path.read_text(encoding="utf-8") if pipeline_path.exists() else ""
+    ctx.say(f"  acting on REVISE feedback for {record.id}")
+    extra = (
+        f"The reviewer REVISED candidate {record.id} and it must be fixed. "
+        f"Reviewer reasoning: {verdict.get('reasoning', '')} "
+        f"Risk flags: {verdict.get('risk_flags', [])}. "
+        f"The current pipeline code:\n```python\n{code}\n```\n"
+        "Produce a corrected version implementing the same roadmap step."
+    )
+    proposal = propose(step, extra=extra)
+    new_record, result = _evaluate_proposal(ctx, plan, proposal, protocol, step)
+    if result.status != "ok":
+        ctx.say(f"  revision {new_record.id} failed ({result.status})")
+        return
+    ctx.say(
+        f"  revision {new_record.id} scored: {result.mean_score:.5f} "
+        f"+/- {result.std_score:.5f}"
+    )
+    review_phase(ctx)
+    submit_phase(ctx)
+
+
 def iterate_phase(ctx: RunContext) -> None:
     """ITERATE: one candidate per pending roadmap step, with repair-retry and budget stops."""
     if ctx.llm is None or ctx.agent_configs is None:
@@ -322,9 +378,6 @@ def iterate_phase(ctx: RunContext) -> None:
     pending = [
         s for s in sorted(plan.roadmap, key=lambda s: s.priority) if s.title not in existing_steps
     ]
-    if not pending:
-        ctx.say("  no pending roadmap steps — nothing to iterate")
-        return
 
     reports_dir = ctx.run.workspace("reports")
     profile_md = (ctx.run.workspace("eda") / "profile.md").read_text(encoding="utf-8")
@@ -381,6 +434,10 @@ def iterate_phase(ctx: RunContext) -> None:
         )
         review_phase(ctx)
         submit_phase(ctx)
+
+    if not pending:
+        ctx.say("  no pending roadmap steps")
+    _run_revision(ctx, plan, protocol, propose)
 
 
 def review_phase(ctx: RunContext) -> None:

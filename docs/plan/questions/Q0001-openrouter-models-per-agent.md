@@ -33,3 +33,14 @@ Start with **(1)** — revisit once the loop runs end-to-end, because actual fai
 modes will tell us which agent needs a better model. Revisit trigger: any phase that
 consistently produces unusable output. Option (3) is a nice later addition once we
 have evidence for what each role needs.
+
+**Note added 2026-10-20 (post live-validation):** the live iteration runs suggest the
+highest-leverage upgrade is the **researcher only** — the other agents' live output
+(analyst reports, plans, verdicts) is already strong on the cheap tier, while codegen
+is where cycles get burned on repairs. Since routing is per-agent, the cheap A/B
+experiment is: same competition, same budget, `ml_researcher.model` upgraded (e.g. a
+frontier reasoning model), compare CV trajectories and failed-candidate counts. A
+better model should mainly *reduce variance* (fewer broken candidates, better
+reviews) and raise the idea ceiling — but the evidence so far says the bigger
+percentile gains come from iteration depth + ensembles + real LB feedback, not
+model tier.
