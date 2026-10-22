@@ -1,0 +1,15 @@
+{
+  "candidate_id": "cand-0013",
+  "metric": "roc_auc",
+  "status": "error",
+  "folds": [],
+  "fold_times": [],
+  "mean_score": null,
+  "std_score": null,
+  "higher_is_better": true,
+  "train_rows": 0,
+  "elapsed_s": 0.0,
+  "pipeline_sha256": "21e1ebf49542e05dbd2a762be8137c5a94a8f0a4597df09aaae5ee3041474952",
+  "submission_sha256": null,
+  "error": "ValueError: 'True' is not in list\nTraceback (most recent call last):\n  File \"/home/gabriel/Documents/Projects/PS CloudWalk/kaggle-slayer/src/slayer/cv/harness.py\", line 172, in _execute\n    score, preds = _score_fold(\n                   ^^^^^^^^^^^^\n  File \"/home/gabriel/Documents/Projects/PS CloudWalk/kaggle-slayer/src/slayer/cv/harness.py\", line 69, in _score_fold\n    preds = np.asarray(_fold_predictions(model, X_val, y_val, metric, problem_type))\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/gabriel/Documents/Projects/PS CloudWalk/kaggle-slayer/src/slayer/cv/harness.py\", line 59, in _fold_predictions\n    return model.predict_proba(X_val)[:, classes.index(str(positive))]\n                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nValueError: 'True' is not in list\n"
+}

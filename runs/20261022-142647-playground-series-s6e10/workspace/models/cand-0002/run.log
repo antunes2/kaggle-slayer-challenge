@@ -1,0 +1,42 @@
+{
+  "candidate_id": "cand-0002",
+  "metric": "roc_auc",
+  "status": "ok",
+  "folds": [
+    {
+      "fold": 0,
+      "score": 0.958942
+    },
+    {
+      "fold": 1,
+      "score": 0.957647
+    },
+    {
+      "fold": 2,
+      "score": 0.959211
+    },
+    {
+      "fold": 3,
+      "score": 0.958618
+    },
+    {
+      "fold": 4,
+      "score": 0.95904
+    }
+  ],
+  "fold_times": [
+    36.4,
+    41.83,
+    35.17,
+    34.74,
+    34.34
+  ],
+  "mean_score": 0.958692,
+  "std_score": 0.000557,
+  "higher_is_better": true,
+  "train_rows": 699635,
+  "elapsed_s": 232.77,
+  "pipeline_sha256": "252db42ac772e656d421d602550c2c691f0c98c10efc822609690199e74e243e",
+  "submission_sha256": "92ee738ccb74eac7eb048697e2bc6650d11fac4ca8e0635a6623e0709132b001",
+  "error": null
+}

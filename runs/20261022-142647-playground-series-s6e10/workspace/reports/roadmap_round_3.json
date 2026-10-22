@@ -1,0 +1,79 @@
+{
+  "assessment": "The gap to the target line (0.00163) is smaller than the spread of all scored CVs (0.002308), suggesting that incremental improvements or a strong, decorrelated model could still close the gap. The median fold standard deviation (0.000614) indicates that the current models are relatively stable. The public notebooks highlight extensive feature engineering, particularly around interactions, delays, and route-based aggregations, as well as the use of external data for target encoding. Our current strategy has explored some of these, but not exhaustively, and the external data has not been fully leveraged for target encoding. The repeated `ValueError: 'True' is not in list` for XGBoost steps (cand-0005, cand-0013) indicates an issue with boolean handling or mapping within the XGBoost pipeline, which was seemingly resolved by wrapping it in a custom estimator (cand-0006, cand-0014). This suggests the underlying issue might be in how the target or certain categorical features are encoded before being passed to XGBoost, or how the wrapper handles them. The CatBoost steps (cand-0011, cand-0016) show lower CV scores compared to LightGBM and XGBoost, suggesting its native categorical handling might not be as effective with the current feature set, or its hyper-parameters need more tuning. The most promising path forward involves leveraging the external data for more robust target encodings and exploring more complex interaction features, especially those derived from the public notebooks, while ensuring robust handling of categorical and boolean features across all models.",
+  "steps": [
+    {
+      "title": "External Data-Enhanced Target Encoding for Route-based Features",
+      "description": "Leverage the provided external datasets (train/test from teejmahal20 and data from arseniyshutko) to create more robust target encodings for route-based features. Specifically, use the combined external data to calculate smoothed target encodings for `Flight Distance` combined with `Class` and `Type of Travel`. The `make_features` function should prepare the base features, and the `build_model` pipeline should include `TargetEncoder` transformers that are fit on the combined external training data and then used to transform both the internal training and validation sets within each CV fold. This will provide a more stable encoding than relying solely on the internal training data for each fold. Ensure the external data is loaded and processed correctly within the harness.",
+      "model_family": "LightGBM",
+      "feature_ideas": [
+        "TE_External_FlightDistance_Class",
+        "TE_External_FlightDistance_TypeOfTravel",
+        "TE_External_CustomerType_TypeOfTravel"
+      ],
+      "priority": 1
+    },
+    {
+      "title": "Advanced Interaction Features from Public Notebooks",
+      "description": "Implement a comprehensive set of interaction features inspired by the 'S6E10 | Are You Satisfied' notebook (anhadmahajan06). Focus on interactions between service ratings, delay features, and customer/travel type. Specifically, include `Delay_Per_Mile`, `Zero_Ratings_Count`, `Net_Satisfaction_Score`, `NonZero_Rating_Mean`, `NonZero_Rating_Std`, `NonZero_Ratings_Ratio`, `Count_Top_Ratings`, `Count_Low_Ratings`, `Wifi_x_Boarding`, `Comfort_x_Clean`, `Entertainment_x_Wifi`, `Wifi_is_zero`, `Boarding_is_zero`, `Clean_Food_Ratio`, `Wifi_Booking_Gap`, `Digital_Service_Index`, `Digital_Satisfaction_Gap`, `Physical_Service_Index`, `Cabin_Comfort_Cluster`, `Service_Expectation_Gap`, `Wifi_Boarding_Ratio`, and `Loyal_Business_Segment`. These features should be created in `make_features` as stateless transformations.",
+      "model_family": "XGBoost",
+      "feature_ideas": [
+        "Delay_Per_Mile",
+        "Zero_Ratings_Count",
+        "Net_Satisfaction_Score",
+        "NonZero_Rating_Mean",
+        "NonZero_Rating_Std",
+        "NonZero_Ratings_Ratio",
+        "Count_Top_Ratings",
+        "Count_Low_Ratings",
+        "Wifi_x_Boarding",
+        "Comfort_x_Clean",
+        "Entertainment_x_Wifi",
+        "Wifi_is_zero",
+        "Boarding_is_zero",
+        "Clean_Food_Ratio",
+        "Wifi_Booking_Gap",
+        "Digital_Service_Index",
+        "Digital_Satisfaction_Gap",
+        "Physical_Service_Index",
+        "Cabin_Comfort_Cluster",
+        "Service_Expectation_Gap",
+        "Wifi_Boarding_Ratio",
+        "Loyal_Business_Segment"
+      ],
+      "priority": 2
+    },
+    {
+      "title": "Refined Route-based Aggregations with External Data",
+      "description": "Revisit route-based aggregations, but this time, use the external data to calculate more robust global means and standard deviations for features like `Inflight wifi service`, `Seat comfort`, and `Arrival Delay in Minutes` grouped by `Flight Distance` (binned by 10). Then, create relative features (e.g., `rel_wifi_route`) by subtracting these global route-based statistics from the individual row values. This approach, inspired by 'S6E10 | Are You Satisfied' (anhadmahajan06), aims to capture deviations from typical route behavior more accurately. Ensure these aggregations are pre-calculated on the combined external training data and then mapped to the internal dataset.",
+      "model_family": "CatBoost",
+      "feature_ideas": [
+        "Flight_Distance_Binned_10",
+        "External_Route_Mean_Wifi_Service",
+        "External_Route_Mean_Seat_Comfort",
+        "External_Route_Mean_Arrival_Delay",
+        "External_Route_Std_Arrival_Delay",
+        "Relative_Wifi_External_Route",
+        "Relative_Seat_External_Route",
+        "Relative_Delay_External_Route"
+      ],
+      "priority": 3
+    },
+    {
+      "title": "Ablation: Remove Low-Performing CatBoost Features",
+      "description": "Given the consistently lower performance of CatBoost models (cand-0004, cand-0011, cand-0016) compared to LightGBM and XGBoost, this step aims to simplify the CatBoost model by removing the complex interaction features that were introduced in roadmap steps 8 and 11. The hypothesis is that these features might be adding noise or are not being effectively utilized by CatBoost's native categorical handling, or that the previous implementations were suboptimal. This step will run CatBoost with a simpler feature set, similar to the baseline, but incorporating only the most impactful stateless features identified from the LightGBM/XGBoost runs (e.g., basic delay features, mean service rating). This will help determine if the issue is with CatBoost itself or the specific features it was given.",
+      "model_family": "CatBoost",
+      "feature_ideas": [
+        "Mean_Service_Rating",
+        "Delay_Total",
+        "Delay_Ratio"
+      ],
+      "priority": 4
+    }
+  ],
+  "new_guidance": [
+    "When using external data for feature engineering (e.g., target encoding, global aggregations), ensure the external data is loaded and pre-processed *once* outside the CV loop. The derived mappings or statistics should then be applied to the internal training and validation sets within each CV fold to prevent leakage and ensure fold-safety. The external data should be treated as a 'prior' or 'global' knowledge source.",
+    "For XGBoost, explicitly ensure that boolean features are converted to integers (0 or 1) before being passed to the model to avoid `ValueError: 'True' is not in list` issues. This conversion should happen within the `build_model` pipeline or `make_features` if stateless."
+  ],
+  "stop": false,
+  "stop_reason": null
+}

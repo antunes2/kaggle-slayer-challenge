@@ -1,6 +1,13 @@
 .venv/
 __pycache__/
-runs/
+runs/*
+!runs/20261022-142647-playground-series-s6e10/
+runs/20261022-142647-playground-series-s6e10/workspace/data/
+runs/20261022-142647-playground-series-s6e10/workspace/external/*/*.csv
+runs/20261022-142647-playground-series-s6e10/workspace/models/*/submission.csv
+runs/20261022-142647-playground-series-s6e10/workspace/models/*/oof.npy
+runs/20261022-142647-playground-series-s6e10/workspace/models/*/fold_ids.npy
+runs/20261022-142647-playground-series-s6e10/workspace/reports/*.zip
 .env
 *.pyc
 .pytest_cache/

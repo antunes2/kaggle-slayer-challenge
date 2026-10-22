@@ -1,0 +1,108 @@
+{
+  "datasets": [
+    {
+      "ref": "arseniyshutko/binary-aviation-satisfaction-129k",
+      "files": [
+        {
+          "key": "data",
+          "path": "/home/gabriel/Documents/Projects/PS CloudWalk/kaggle-slayer/runs/20261022-142647-playground-series-s6e10/workspace/external/arseniyshutko__binary-aviation-satisfaction-129k/data.csv",
+          "rows": 129880,
+          "columns": [
+            "Gender",
+            "Customer Type",
+            "Age",
+            "Type of Travel",
+            "Class",
+            "Flight Distance",
+            "Inflight wifi service",
+            "Departure/Arrival time convenient",
+            "Ease of Online booking",
+            "Gate location",
+            "Food and drink",
+            "Online boarding",
+            "Seat comfort",
+            "Inflight entertainment",
+            "On-board service",
+            "Leg room service",
+            "Baggage handling",
+            "Checkin service",
+            "Cleanliness",
+            "Departure Delay in Minutes",
+            "Arrival Delay in Minutes",
+            "satisfaction"
+          ]
+        }
+      ]
+    },
+    {
+      "ref": "teejmahal20/airline-passenger-satisfaction",
+      "files": [
+        {
+          "key": "test",
+          "path": "/home/gabriel/Documents/Projects/PS CloudWalk/kaggle-slayer/runs/20261022-142647-playground-series-s6e10/workspace/external/teejmahal20__airline-passenger-satisfaction/test.csv",
+          "rows": 25976,
+          "columns": [
+            "Unnamed: 0",
+            "id",
+            "Gender",
+            "Customer Type",
+            "Age",
+            "Type of Travel",
+            "Class",
+            "Flight Distance",
+            "Inflight wifi service",
+            "Departure/Arrival time convenient",
+            "Ease of Online booking",
+            "Gate location",
+            "Food and drink",
+            "Online boarding",
+            "Seat comfort",
+            "Inflight entertainment",
+            "On-board service",
+            "Leg room service",
+            "Baggage handling",
+            "Checkin service",
+            "Inflight service",
+            "Cleanliness",
+            "Departure Delay in Minutes",
+            "Arrival Delay in Minutes",
+            "satisfaction"
+          ]
+        },
+        {
+          "key": "train",
+          "path": "/home/gabriel/Documents/Projects/PS CloudWalk/kaggle-slayer/runs/20261022-142647-playground-series-s6e10/workspace/external/teejmahal20__airline-passenger-satisfaction/train.csv",
+          "rows": 103904,
+          "columns": [
+            "Unnamed: 0",
+            "id",
+            "Gender",
+            "Customer Type",
+            "Age",
+            "Type of Travel",
+            "Class",
+            "Flight Distance",
+            "Inflight wifi service",
+            "Departure/Arrival time convenient",
+            "Ease of Online booking",
+            "Gate location",
+            "Food and drink",
+            "Online boarding",
+            "Seat comfort",
+            "Inflight entertainment",
+            "On-board service",
+            "Leg room service",
+            "Baggage handling",
+            "Checkin service",
+            "Inflight service",
+            "Cleanliness",
+            "Departure Delay in Minutes",
+            "Arrival Delay in Minutes",
+            "satisfaction"
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": []
+}

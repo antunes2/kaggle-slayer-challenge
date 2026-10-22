@@ -163,6 +163,16 @@ runs/<run_id>/
     └── reports/        # strategy, roadmaps, notebook digest, leaderboard snapshot
 ```
 
+### A real run in this repository
+
+One complete campaign is checked in at
+[`runs/20261022-142647-playground-series-s6e10/`](runs/20261022-142647-playground-series-s6e10/)
+— the same s6e10 run cited above (4 live submissions, **LB 0.96015 ≈ top 45.7%**).
+It includes the config snapshot, append-only journal, EDA profile, strategy and roadmap
+reports, external-data manifest, and every candidate's `pipeline.py`, CV results, and
+logs. Raw competition data, external CSVs, submissions, OOF/fold arrays, and duplicate
+zips are excluded (≈0.5 MB checked in instead of 416 MB). Other runs remain gitignored.
+
 ### Safety and guarantees
 
 | Guarantee | How |

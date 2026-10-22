@@ -1,0 +1,10 @@
+{
+  "ref": "playground-series-s6e10",
+  "title": "Predicting Airline Satisfaction",
+  "category": "Playground",
+  "reward": null,
+  "deadline": "2026-10-31 23:59:00",
+  "evaluation_metric": "Roc Auc Score",
+  "user_has_entered": true,
+  "max_daily_submissions": 10
+}

@@ -1,0 +1,351 @@
+{
+  "competition": "playground-series-s6e10",
+  "train_rows": 699635,
+  "train_cols": 23,
+  "test_rows": 299844,
+  "target_column": "satisfaction",
+  "problem_type_guess": "binary_classification",
+  "columns": [
+    {
+      "name": "id",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 699635,
+      "numeric": true,
+      "facts": {
+        "mean": "3.498e+05",
+        "std": "2.02e+05",
+        "min": "0",
+        "max": "6.996e+05"
+      }
+    },
+    {
+      "name": "Age",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 75,
+      "numeric": true,
+      "facts": {
+        "mean": "39",
+        "std": "13.8",
+        "min": "7",
+        "max": "85"
+      }
+    },
+    {
+      "name": "Flight Distance",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 3474,
+      "numeric": true,
+      "facts": {
+        "mean": "1354",
+        "std": "954.4",
+        "min": "67",
+        "max": "4983"
+      }
+    },
+    {
+      "name": "Inflight wifi service",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "2.779",
+        "std": "1.28",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Departure/Arrival time convenient",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "3.156",
+        "std": "1.475",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Ease of Online booking",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "2.813",
+        "std": "1.33",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Gate location",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "3.014",
+        "std": "1.254",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Food and drink",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "3.266",
+        "std": "1.3",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Online boarding",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "3.364",
+        "std": "1.289",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Seat comfort",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "3.569",
+        "std": "1.275",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Inflight entertainment",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "3.454",
+        "std": "1.308",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "On-board service",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "3.517",
+        "std": "1.238",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Leg room service",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "3.473",
+        "std": "1.272",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Baggage handling",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 5,
+      "numeric": true,
+      "facts": {
+        "mean": "3.805",
+        "std": "1.079",
+        "min": "1",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Checkin service",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "3.42",
+        "std": "1.211",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Cleanliness",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 6,
+      "numeric": true,
+      "facts": {
+        "mean": "3.38",
+        "std": "1.278",
+        "min": "0",
+        "max": "5"
+      }
+    },
+    {
+      "name": "Departure Delay in Minutes",
+      "dtype": "int64",
+      "missing_pct": 0.0,
+      "nunique": 167,
+      "numeric": true,
+      "facts": {
+        "mean": "1.176",
+        "std": "5.982",
+        "min": "0",
+        "max": "489"
+      }
+    },
+    {
+      "name": "Arrival Delay in Minutes",
+      "dtype": "float64",
+      "missing_pct": 0.04,
+      "nunique": 168,
+      "numeric": true,
+      "facts": {
+        "mean": "1.134",
+        "std": "5.749",
+        "min": "0",
+        "max": "491"
+      }
+    },
+    {
+      "name": "Gender",
+      "dtype": "str",
+      "missing_pct": 0.0,
+      "nunique": 2,
+      "numeric": false,
+      "facts": {
+        "Male": "50.3%",
+        "Female": "49.7%"
+      }
+    },
+    {
+      "name": "Customer Type",
+      "dtype": "str",
+      "missing_pct": 0.0,
+      "nunique": 2,
+      "numeric": false,
+      "facts": {
+        "Loyal Customer": "82.5%",
+        "disloyal Customer": "17.5%"
+      }
+    },
+    {
+      "name": "Type of Travel",
+      "dtype": "str",
+      "missing_pct": 0.0,
+      "nunique": 2,
+      "numeric": false,
+      "facts": {
+        "Business travel": "71.1%",
+        "Personal Travel": "28.9%"
+      }
+    },
+    {
+      "name": "Class",
+      "dtype": "str",
+      "missing_pct": 0.0,
+      "nunique": 3,
+      "numeric": false,
+      "facts": {
+        "Business": "48.9%",
+        "Eco": "46.8%",
+        "Eco Plus": "4.3%"
+      }
+    },
+    {
+      "name": "satisfaction",
+      "dtype": "bool",
+      "missing_pct": 0.0,
+      "nunique": 2,
+      "numeric": true,
+      "facts": {
+        "mean": "-",
+        "std": "-",
+        "min": "-",
+        "max": "-"
+      }
+    }
+  ],
+  "target_summary": {
+    "False": "55.6%",
+    "True": "44.4%"
+  },
+  "top_correlations": [
+    [
+      "Online boarding",
+      0.5596
+    ],
+    [
+      "Inflight entertainment",
+      0.4308
+    ],
+    [
+      "Seat comfort",
+      0.4015
+    ],
+    [
+      "Flight Distance",
+      0.37
+    ],
+    [
+      "On-board service",
+      0.3466
+    ],
+    [
+      "Cleanliness",
+      0.3389
+    ],
+    [
+      "Leg room service",
+      0.3301
+    ],
+    [
+      "Inflight wifi service",
+      0.2913
+    ],
+    [
+      "Baggage handling",
+      0.2581
+    ],
+    [
+      "Checkin service",
+      0.2498
+    ]
+  ],
+  "notes": [
+    "target has 2 class(es)"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "candidate_id": "cand-0006",
+  "data_dir": "/home/gabriel/Documents/Projects/PS CloudWalk/kaggle-slayer/runs/20261022-142647-playground-series-s6e10/workspace/data",
+  "target_column": "satisfaction",
+  "problem_type": "binary_classification",
+  "metric": "Roc Auc Score",
+  "k_folds": 5,
+  "seed": 42,
+  "stratified": true,
+  "budget_s": 1800
+}
