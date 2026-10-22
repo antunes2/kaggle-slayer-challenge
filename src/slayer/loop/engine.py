@@ -125,15 +125,22 @@ class LoopEngine:
             self._decider = decider
 
     def start(self) -> Run:
-        """Execute the linear pass, then bounded re-entry rounds, until done/pause/failure."""
+        """Execute the linear pass, then bounded re-entry rounds, until done/pause/failure.
+
+        Ctrl+C (KeyboardInterrupt) pauses the run cleanly — status `paused`, journaled —
+        so `slayer resume` continues it (Q0003).
+        """
         self._ctx.run = self._ctx.store.update_status(self._ctx.run, RunStatus.ACTIVE)
-        for phase in PHASE_ORDER:
-            handler = self._handlers.get(phase)
-            if handler is None:
-                return self._pause(f"'{phase.value}' phase arrives with the next milestone")
-            self._run_phase(phase, handler)
-        if self._decider is not None:
-            self._run_rounds()
+        try:
+            for phase in PHASE_ORDER:
+                handler = self._handlers.get(phase)
+                if handler is None:
+                    return self._pause(f"'{phase.value}' phase arrives with the next milestone")
+                self._run_phase(phase, handler)
+            if self._decider is not None:
+                self._run_rounds()
+        except KeyboardInterrupt:
+            return self._pause("interrupted by user (Ctrl+C) — resume to continue")
         self._ctx.say("[done] all phases completed")
         return self._ctx.store.update_status(self._ctx.run, RunStatus.FINISHED)
 

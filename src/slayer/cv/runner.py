@@ -69,6 +69,11 @@ def run_candidate(
         except subprocess.TimeoutExpired:
             timed_out = True
             _kill_process_group(process)
+        except KeyboardInterrupt:
+            # The harness runs in its own session, so Ctrl+C does not reach it — kill it
+            # here or it would keep training with no parent (Q0003 orphan risk).
+            _kill_process_group(process)
+            raise
 
     if timed_out:
         partial = _read_partial(candidate_dir)

@@ -327,6 +327,7 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | 4.3 | OOF persistence in the harness + deterministic hill-climb blender (code-owned blend step at the end of ITERATE); researcher model A/B (`ml_researcher` → claude-sonnet-5.5) | ✅ ([design](designs/14-oof-blender.md); live: correct, ~zero gain on near-identical candidates) |
 | 4.4 | Evidence-driven strategy ([C0004](changes/C0004-evidence-driven-strategy.md)): public-notebook scout → planner digest; generic representation-first prompts; paired-noise gate/reviewer wording; connection-blip retry budget; duplicate-blend fix | ✅ ([design](designs/15-notebook-scout.md); live test in progress) |
 | 4.5 | Paired-fold submission gate + reviewer re-review fix (skip candidates with a verdict; revise the best REVISE'd candidate first, with lineage) + `slayer competitions` browse command (Q0004 → D0008) | ✅ |
+| 4.6 | Delivery hardening: graceful Ctrl+C (Q0003 option 2 + harness kill), consolidated `docs/limitations.md`, README rewrite, repo cleanup | ✅ |
 
 ## 12. Testing Strategy
 
@@ -362,8 +363,7 @@ Decisions are recorded as ADRs in [`decisions/`](decisions/); open questions liv
 | D7 | Shortfall handling | Automatic bounded re-entry rounds (gate → REPLAN → ITERATE…MONITOR), ≤ `max_rounds` | [D0007](decisions/D0007-bounded-reentry-rounds.md) |
 | D8 | Competition discovery | `slayer competitions` browse command (filters); no picker, no auto-selection | [D0008](decisions/D0008-competition-browse-command.md) |
 
-**Open questions:** [Q0003](questions/Q0003-interruption-safety.md) (graceful SIGINT
-still open).
+**Open questions:** none (Q0003 settled for v1; residual risks in `docs/limitations.md`).
 
 ## 15. Documentation Conventions (`docs/plan/`)
 

@@ -5,7 +5,7 @@
 > structure: `docs/architecture.md` (system), `docs/loop.md` (phases),
 > `docs/usage.md` (operating). Master plan: `docs/plan/00-implementation-plan.md`.
 
-*Updated: 2026-10-22 (4.5 — paired gate, review fix, `slayer competitions`)*
+*Updated: 2026-10-22 (4.6 — delivery hardening; v1.0 codebase, limitations documented)*
 
 ## Where we are
 
@@ -21,7 +21,8 @@ are implemented. The big lesson of the day (full evidence in
 | 4.1 monitor · 4.2 re-entry rounds · 4.3 OOF blender + researcher A/B | ✅ live |
 | 4.4 notebook scout + evidence-driven prompts + retry hardening | ✅ (live test confirms direction) |
 | 4.5 paired-fold submission gate + reviewer re-review fix + `slayer competitions` | ✅ (unit-tested; not yet live) |
-| Phase 5 — daemon/attach/chat, agentic orchestrator | ⬜ |
+| 4.6 graceful Ctrl+C, `docs/limitations.md`, README, cleanup | ✅ |
+| Phase 5 — daemon/attach/chat, agentic orchestrator | ⬜ (out of v1 scope) |
 
 ## Live evidence (`playground-series-s6e9`, closed; target line 0.94640 = top 20%)
 
@@ -44,7 +45,8 @@ are implemented. The big lesson of the day (full evidence in
 - Validated on **one** competition only (s6e9, binary AUC). Regression/multiclass paths
   are unit-tested but never live; OOF blending supports binary-proba and regression only.
 - Harness assumes `train.csv` / `test.csv` / `sample_submission.csv`; other layouts fail.
-- Q0003 — Ctrl+C leaves status `active`; an orphaned harness can outlive its budget.
+- A *hard* kill (not Ctrl+C) can still orphan a harness process (Q0003 residual).
+- Full, consolidated list: [`docs/limitations.md`](../limitations.md).
 - Generated code runs in the local venv (no docker sandbox yet).
 
 ## Next steps (recommended order)
@@ -54,9 +56,8 @@ are implemented. The big lesson of the day (full evidence in
    rules at https://www.kaggle.com/competitions/playground-series-s6e10/rules, then
    `uv run slayer run playground-series-s6e10 --live` (approve-first: you confirm each
    real submission). Resume once per day until the deadline.
-2. Graceful Ctrl+C (Q0003.2) — small.
-3. A second, different competition (regression or multiclass) to prove generality.
-4. Phase 5 (daemon/attach/chat, agentic orchestrator) only after the above.
+2. A second, different competition (regression or multiclass) to prove generality.
+3. Phase 5 (daemon/attach/chat, agentic orchestrator) only after the above.
 
 ## Conventions for a new session
 

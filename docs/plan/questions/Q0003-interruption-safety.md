@@ -1,6 +1,6 @@
 # Q0003 — What happens when the CLI is stopped mid-run? (interruption safety)
 
-- **Status:** open (documented findings; implementation not scheduled yet)
+- **Status:** settled for v1 (options 1 + 2 implemented; hard-kill residual risk documented)
 - **Raised:** 2026-10-20
 - **Blocks:** nothing — current behavior is safe-but-untidy for tokens, with one orphan-process edge case.
 
@@ -41,3 +41,10 @@ killer) was already dead. Process killed manually. The bounded-retry cap (design
 addendum) prevents this specific step from re-spawning, but the general orphan risk
 remains; a detached watchdog (runner-spawned killer process) is the candidate fix if
 incidents recur. Option (2) (graceful SIGINT → paused status) remains open for Phase 4.
+
+**Update 2026-10-22 — option (2) implemented:** Ctrl+C (KeyboardInterrupt) anywhere in
+the loop → run `paused` with a journaled `loop.paused` reason; Ctrl+C at the y/n
+submission prompt is treated the same; the runner kills the detached harness process
+group on KeyboardInterrupt (closing the Ctrl+C orphan path). Remaining: a *hard* kill
+(`kill -9`, power loss) can still orphan a harness — option (3)/a watchdog stays
+deferred. Status: **settled for v1** (residual risk in `docs/limitations.md`).

@@ -323,3 +323,16 @@ def test_competitions_lists_refs(tmp_path, monkeypatch) -> None:
     assert "deadline 2026-11-30" in result.output and "[entered]" in result.output
     assert "slayer run <ref>" in result.output
     assert _FakeListKaggle.calls[-1]["category"] is None
+
+
+def test_ctrl_c_at_submission_prompt_becomes_keyboard_interrupt(monkeypatch) -> None:
+    """Aborting the y/n prompt pauses the run (KeyboardInterrupt), not fails it."""
+    import pytest
+
+    def abort(*args, **kwargs):
+        """Simulate Ctrl+C at the confirm prompt."""
+        raise cli_main.typer.Abort()
+
+    monkeypatch.setattr(cli_main.typer, "confirm", abort)
+    with pytest.raises(KeyboardInterrupt):
+        cli_main._confirm_submission("Submit?")

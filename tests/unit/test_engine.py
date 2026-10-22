@@ -113,3 +113,19 @@ def test_engine_reports_phase_activity(tmp_path) -> None:
     assert any("[phase] init" in m for m in messages)
     assert any("[phase] data_collection" in m for m in messages)
     assert any("[pause]" in m for m in messages)
+
+
+def test_ctrl_c_pauses_the_run_cleanly(tmp_path) -> None:
+    """KeyboardInterrupt inside a phase → status paused + journaled reason (Q0003)."""
+    store, ctx = _make_ctx(tmp_path, FakeKaggle())
+
+    def interrupted(c):
+        """Simulate the user pressing Ctrl+C mid-phase."""
+        raise KeyboardInterrupt
+
+    final = LoopEngine(ctx, handlers={Phase.INIT: interrupted}).start()
+
+    assert final.status == RunStatus.PAUSED
+    assert store.get(ctx.run.run_id).status == RunStatus.PAUSED
+    paused = ctx.journal.read(type=EventType.LOOP_PAUSED)
+    assert "Ctrl+C" in paused[-1].data["reason"]

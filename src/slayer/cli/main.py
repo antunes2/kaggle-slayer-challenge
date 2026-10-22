@@ -265,6 +265,14 @@ def resume(
     _execute_run(config_dir=config_dir, env_file=env_file, run=run)
 
 
+def _confirm_submission(question: str) -> bool:
+    """Ask y/n before a real submission; Ctrl+C at the prompt pauses the run."""
+    try:
+        return typer.confirm(question, default=False)
+    except typer.Abort as exc:
+        raise KeyboardInterrupt from exc
+
+
 def _execute_run(config_dir: Path, env_file: Path, run) -> None:
     """Build all clients for an existing run and execute the loop to completion."""
     cfg = load_slayer_config(config_dir / "slayer.yaml")
@@ -302,7 +310,7 @@ def _execute_run(config_dir: Path, env_file: Path, run) -> None:
         llm=llm,
         agent_configs=agents_cfg,
         sink=MockSink() if run.dry_run else KaggleSink(kaggle),
-        approver=lambda question: typer.confirm(question, default=False),
+        approver=_confirm_submission,
     )
     try:
         final = LoopEngine(ctx).start()
@@ -318,6 +326,8 @@ def _execute_run(config_dir: Path, env_file: Path, run) -> None:
         typer.secho(f"run finished: {run.run_id}", fg="green", bold=True)
     else:
         typer.secho(f"run {final.status}: {run.run_id}", fg="yellow", bold=True)
+        if final.status == RunStatus.PAUSED:
+            typer.echo(f"  continue with: uv run slayer resume {run.run_id}")
 
 
 @app.command()

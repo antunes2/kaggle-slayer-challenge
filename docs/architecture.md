@@ -129,9 +129,9 @@ is the highest-leverage model (A/B in `docs/plan/questions/Q0001`). How the agen
 
 ## Known limitations (honest)
 
-- SIGALRM cannot interrupt long C fits — an orphaned harness can outlive its budget
-  if the parent is killed (live incident logged in `docs/plan/questions/Q0003`).
-- Ctrl+C leaves the run status `active` (graceful SIGINT → paused is open, Q0003).
+- Full inventory: [`docs/limitations.md`](limitations.md).
+- Ctrl+C pauses the run and kills the running harness; a *hard* kill of the CLI can
+  still orphan a harness (SIGALRM cannot interrupt long C fits — Q0003).
 - MONITOR matches leaderboard entries by username/display-name heuristics.
 - OOF blending covers binary-probability metrics and regression only; candidates
   scored before design 14 have no OOF and are never blended.

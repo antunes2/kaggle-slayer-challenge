@@ -73,8 +73,8 @@ during CV is normal` means a sandboxed harness is training models. Failures prin
 error's first line and trigger one repair attempt per step.
 
 A run takes minutes to ~an hour depending on dataset size, roadmap depth, and the
-harness budget. Everything is resumable — Ctrl+C and resume later is safe (the run
-status will read `active` until resumed; that's a known cosmetic gap).
+harness budget. Everything is resumable — **Ctrl+C pauses the run** (status `paused`,
+the running harness is killed) and prints the `slayer resume <id>` command.
 
 ## Configuration
 
@@ -142,6 +142,8 @@ should arrive through the data profile and the notebook digest (C0004).
   the data alone (new competitions often have few notebooks).
 - **`exhausted 3 attempts`** — a roadmap step failed initial + repair + retry; inspect
   `workspace/models/*/run.log`, fix the prompt or config, resume.
-- **Stuck `active` after Ctrl+C** — cosmetic; `slayer resume <id>` picks up cleanly.
-- **Orphan harness process** (rare, after killing the CLI mid-CV) —
+- **Status `active` but nothing running** — the CLI was hard-killed (not Ctrl+C);
+  `slayer resume <id>` picks up cleanly.
+- **Orphan harness process** (rare, only after a hard kill mid-CV) —
   `pkill -9 -f slayer.cv.harness`.
+- What Slayer does not guarantee: [`docs/limitations.md`](limitations.md).

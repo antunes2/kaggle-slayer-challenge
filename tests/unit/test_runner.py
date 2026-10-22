@@ -87,3 +87,37 @@ def test_runner_error_pipeline_returns_error_result(tmp_path):
 
     assert result.status == "error"
     assert "RuntimeError" in (result.error or "")
+
+
+def test_ctrl_c_during_cv_kills_the_harness(tmp_path, monkeypatch) -> None:
+    """The detached harness is killed on Ctrl+C instead of being orphaned."""
+    import subprocess
+
+    import pytest
+
+    from slayer.config import DefaultsConfig
+    from slayer.cv import runner as runner_module
+    from slayer.schemas import CVProtocol
+    from slayer.workspace import RunStore
+
+    run = RunStore(tmp_path / "runs").create("comp-x", DefaultsConfig())
+    folder = run.workspace("models") / "cand-0001"
+    folder.mkdir(parents=True)
+    (folder / "pipeline.py").write_text("def build_model():\n    pass\n", encoding="utf-8")
+    killed = []
+
+    class InterruptedProcess:
+        pid = 0
+
+        def wait(self, timeout=None):
+            """Simulate Ctrl+C while waiting for the harness."""
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: InterruptedProcess())
+    monkeypatch.setattr(runner_module, "_kill_process_group", killed.append)
+
+    with pytest.raises(KeyboardInterrupt):
+        runner_module.run_candidate(
+            run, "cand-0001", CVProtocol(metric="Roc Auc Score"), "binary_classification", "y"
+        )
+    assert len(killed) == 1
