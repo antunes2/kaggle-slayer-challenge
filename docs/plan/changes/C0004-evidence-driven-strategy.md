@@ -70,8 +70,9 @@ extra round allowed. Round 3 with the scout + new prompts:
   candidate above the 0.9420 ceiling (+0.0020, ~4× the entire previous spread). On the
   leaderboard table that is ≈ top 46% (from ≈ top 53%).
 - **cand-0017 (frequency encoding + combined keys): CV 0.94426 ± 0.00069** — approved
-  and (mock) submitted; the round's remaining steps were still running when this was
-  written.
+  and (mock) submitted. Remaining round steps: multi-smoothing target encoding 0.94323;
+  "capacity increase" 0.94263 (worse — more capacity on the richer feature set did not
+  pay here). Test stopped after these to free the CPU for the live campaign.
 - The reviewer REVISE'd cand-0016 for a guidance-compliance detail (digit features not
   typed as categorical), so it stays `scored` and cannot be submitted until revised —
   the re-review / REVISE handling gap (step 4.5) now blocks the best candidate.
