@@ -32,3 +32,5 @@ What we lean toward and why; when to revisit.
 
 - [Q0001 — Which OpenRouter model(s) should each agent use?](Q0001-openrouter-models-per-agent.md)
 - [Q0002 — How should the harness handle slow or pathological candidates?](Q0002-harness-timeout-handling.md)
+- [Q0003 — What happens when the CLI is stopped mid-run?](Q0003-interruption-safety.md)
+- [Q0004 — How does the user pick a competition?](Q0004-competition-discovery-ux.md)

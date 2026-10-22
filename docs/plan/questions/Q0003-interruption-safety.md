@@ -1,0 +1,39 @@
+# Q0003 — What happens when the CLI is stopped mid-run? (interruption safety)
+
+- **Status:** open (documented findings; implementation not scheduled yet)
+- **Raised:** 2026-10-20
+- **Blocks:** nothing — current behavior is safe-but-untidy for tokens, with one orphan-process edge case.
+
+## Findings (as of step 3.2)
+
+| Component | On Ctrl+C (SIGINT) | Risk |
+|-----------|--------------------|------|
+| Agent LLM calls | In-process, synchronous — die with the CLI; OpenRouter stops generating on the dropped request | **No eternal token burn.** Worst case: pay for the one in-flight call's partial output (bounded by max_tokens) |
+| Harness subprocess | Deliberately detached (`start_new_session=True`) — **survives** the CLI's death, finishes the CV, writes results, exits | No tokens (pure CPU), **but the parent was the only timeout enforcer**: a pathological orphaned candidate has no kill switch → potential unkillable orphan process |
+| Run state | `KeyboardInterrupt` isn't caught — run status stays `active` (the plan's §6.2 "graceful Ctrl+C pause" marking is **not implemented**) | Misleading status; recovery works anyway via `slayer resume` (skip logic) |
+| Journal/registry | All writes are append-only/atomic up to the interrupt point | Safe — resume picks up cleanly |
+
+## Options
+
+1. **Harness self-enforced deadline** — pass `budget_s` in `cv_config.json`; the harness
+   sets its own `signal.alarm`/deadline so an orphan can never outlive its budget even
+   without a parent. (Step 3.3 passes the budget into the config already; the
+   self-enforcement is the small extra.)
+2. **Graceful SIGINT handler in the CLI** — catch KeyboardInterrupt at the engine
+   boundary, mark the run `paused` with a `run.interrupted` journal event, exit 0.
+   Makes the plan's §6.2 promise true.
+3. **Adoption of orphan harnesses on resume** — scan for running harness processes of
+   the run's candidates and wait/kill on resume. Most complex; only needed if orphans
+   become common.
+
+## Recommendation
+
+**(1) + (2)** — both are small, close the only real risks (orphan process, lying run
+status), and make Ctrl+C semantics match the plan. **(3)** deferred until proven
+necessary. Suggested slot: fold (1) into step 3.3 (it shares the budget plumbing);
+(2) into Phase 4 ops.
+
+**Update 2026-10-20:** option (1) is now **implemented** (step 3.3: the harness
+self-enforces its budget via SIGALRM). Note it is best-effort — during long C calls
+(e.g. a LightGBM fit) the alarm raises only when Python regains control; the parent's
+SIGKILL remains the authoritative enforcer. Option (2) remains open for Phase 4.

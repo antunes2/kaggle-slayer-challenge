@@ -1,6 +1,6 @@
 # Q0002 — How should the harness handle slow or pathological candidates?
 
-- **Status:** open (plan agreed; implementation = Phase 3 step 3.3)
+- **Status:** settled → implemented in step 3.3 (2026-10-20)
 - **Raised:** 2026-10-20
 - **Blocks:** nothing — current fixed 600s timeout + clean failure path work today.
 
@@ -42,3 +42,15 @@ engine consumes). **(5)** rejected for v1.
 
 The clean existing failure path (candidate `failed`, run fails, nothing corrupted)
 stays as the backstop in all cases.
+
+## Outcome (step 3.3)
+
+All four options landed: `harness_timeout_s` is configurable per run (config +
+`--harness-timeout-s`), the researcher prompt states the budget with a per-fold hint,
+the harness runs a **probe fold** (fold-0 timing × (k+1) vs 125% of budget aborts
+early with timing data), and fold results are **persisted incrementally** so even a
+killed harness leaves partial scores + per-fold timings for the repair prompt. As a
+bonus, the harness now **self-enforces its deadline** via SIGALRM (Q0003 option 1) —
+an orphaned harness can no longer run forever. Caveat noted in Q0003: SIGALRM is
+best-effort during long C calls (LightGBM fit); the parent's SIGKILL stays the
+authoritative enforcer.
