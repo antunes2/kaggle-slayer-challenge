@@ -43,7 +43,7 @@ uv run slayer status                 # list runs (or one run's detail + LLM spen
 uv run slayer journal <run_id>       # event timeline; --limit N
 uv run slayer leaderboard <comp>    # top-10 + our position
 uv run slayer dashboard             # every run: attempts, scores, position, spend
-#   --competition <ref>   --html report.html (self-contained dark interactive report)
+#   --competition <ref>   --html report.html (dark interactive report + compare view)
 
 uv run slayer init                  # environment check
 ```

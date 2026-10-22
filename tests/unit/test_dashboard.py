@@ -3,7 +3,12 @@ from typer.testing import CliRunner
 
 from slayer.cli.main import app
 from slayer.config import DefaultsConfig
-from slayer.dashboard import collect, render_html, render_terminal
+from slayer.dashboard import (
+    aggregate_competitions,
+    collect,
+    render_html,
+    render_terminal,
+)
 from slayer.workspace import EventType, ModelCandidate, RunStore
 
 runner = CliRunner()
@@ -66,3 +71,29 @@ def test_cli_dashboard_writes_html(tmp_path) -> None:
     result = runner.invoke(app, ["dashboard", "--config-dir", str(cfg), "--html", str(out)])
     assert result.exit_code == 0 and "comp-x" in result.output
     assert out.exists() and "<svg" in out.read_text()
+
+def test_competition_aggregation_and_compare_view(tmp_path) -> None:
+    """Per-competition rollups and the head-to-head comparison view derive from runs."""
+    store = _seed(tmp_path)
+    second = store.create("comp-y", DefaultsConfig(dry_run=True))
+    registry = store.registry(second)
+    candidate = registry.add(ModelCandidate(model_type="catboost"))
+    registry.record_cv(candidate.id, 0.80, 0.001)
+    journal = store.journal(second)
+    journal.append(agent="loop", type=EventType.MONITOR_POSITION,
+                   data={"rank": 5, "total": 100, "percentile": 5.0, "basis": "listed"})
+    journal.append(agent="planner", type=EventType.ROADMAP_EXTENDED,
+                   data={"steps_added": 3})
+
+    summaries = collect(store)
+    competitions = aggregate_competitions(summaries)
+    assert [c.competition for c in competitions] == ["comp-y", "comp-x"]
+    x = next(c for c in competitions if c.competition == "comp-x")
+    y = next(c for c in competitions if c.competition == "comp-y")
+    assert (x.campaigns, x.best_cv, x.best_percentile, x.spend_usd) == (1, 0.953, 10.0, 0.25)
+    assert (y.campaigns, y.dry, y.best_percentile, y.rounds) == (1, 1, 5.0, 1)
+
+    page = render_html(summaries, "2026-10-22T00:00:00+00:00")
+    assert 'id="view-compare"' in page and "Competition head-to-head" in page
+    assert 'data-view="compare"' in page and "Best finish vs LLM spend" in page
+    assert "Head-to-head table" in page and "cmp-point" in page

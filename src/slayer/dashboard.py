@@ -28,6 +28,29 @@ class CandidatePoint:
 
 
 @dataclass
+class CompetitionSummary:
+    """Aggregated view of every campaign on one competition."""
+
+    competition: str
+    campaigns: int
+    live: int
+    dry: int
+    best_cv: float | None
+    best_lb: float | None
+    best_percentile: float | None
+    best_rank: int | None
+    best_total: int | None
+    target_percentile: int | None
+    spend_usd: float
+    real_submissions: int
+    mock_submissions: int
+    candidates: int
+    scored: int
+    failed: int
+    rounds: int
+
+
+@dataclass
 class RunSummary:
     """Per-run campaign summary."""
 
@@ -131,6 +154,49 @@ def collect(store: RunStore, competition: str | None = None) -> list[RunSummary]
             if competition is None or run.competition == competition]
 
 
+def aggregate_competitions(summaries: list[RunSummary]) -> list[CompetitionSummary]:
+    """Roll runs up per competition, best finish first (unknown positions last)."""
+    grouped: dict[str, list[RunSummary]] = {}
+    for summary in summaries:
+        grouped.setdefault(summary.competition, []).append(summary)
+
+    out: list[CompetitionSummary] = []
+    for competition, runs in grouped.items():
+        pick = max if runs[0].higher_is_better else min
+        cvs = [r.best_cv for r in runs if r.best_cv is not None]
+        lbs = [r.best_lb for r in runs if r.best_lb is not None]
+        ranked = [r for r in runs if r.percentile is not None]
+        best = min(ranked, key=lambda r: r.percentile) if ranked else None
+        out.append(CompetitionSummary(
+            competition=competition,
+            campaigns=len(runs),
+            live=sum(1 for r in runs if r.live),
+            dry=sum(1 for r in runs if not r.live),
+            best_cv=pick(cvs) if cvs else None,
+            best_lb=pick(lbs) if lbs else None,
+            best_percentile=best.percentile if best else None,
+            best_rank=best.rank if best else None,
+            best_total=best.total if best else None,
+            target_percentile=(best.target_percentile if best else
+                               runs[0].target_percentile),
+            spend_usd=sum(r.spend_usd for r in runs),
+            real_submissions=sum(r.real_submissions for r in runs),
+            mock_submissions=sum(r.mock_submissions for r in runs),
+            candidates=sum(r.candidates for r in runs),
+            scored=sum(r.scored for r in runs),
+            failed=sum(r.failed for r in runs),
+            rounds=sum(r.rounds for r in runs),
+        ))
+
+    def sort_key(c: CompetitionSummary) -> tuple[int, float, int, str]:
+        """Order by best percentile, then campaign count, then name."""
+        if c.best_percentile is None:
+            return (1, 0.0, -c.campaigns, c.competition)
+        return (0, c.best_percentile, -c.campaigns, c.competition)
+
+    return sorted(out, key=sort_key)
+
+
 def _fmt(value: float | None, digits: int = 5) -> str:
     """Format an optional score."""
     return "-" if value is None else f"{value:.{digits}f}"
@@ -161,6 +227,7 @@ _PAGE_CSS = """
   --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{color-scheme:dark}
 body{
   margin:0;min-height:100vh;background:var(--bg);color:var(--text);
@@ -260,6 +327,78 @@ h1 .grad{
 .search input{all:unset;width:100%;font:inherit;font-size:13px;color:var(--text)}
 .search input::placeholder{color:var(--dim)}
 .grid{display:grid;gap:16px}
+.view{animation:fade .24s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.view-tabs{
+  display:inline-flex;gap:3px;padding:4px;border:1px solid var(--line);
+  border-radius:999px;background:rgba(255,255,255,.03);
+}
+.view-tab{
+  appearance:none;border:0;border-radius:999px;background:transparent;color:var(--muted);
+  padding:7px 13px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;transition:color .18s,background .18s;
+}
+.view-tab:hover{color:var(--text)}
+.view-tab.is-active{
+  color:#0a0b10;background:linear-gradient(135deg,var(--violet-2),var(--cyan));
+  box-shadow:0 8px 24px -10px rgba(139,92,246,.8);
+}
+.view-tab .n{font-family:var(--mono);font-size:11px;opacity:.6}
+.filters{
+  display:flex;flex:1;flex-wrap:wrap;gap:12px;align-items:center;
+  justify-content:space-between;min-width:260px;
+}
+.compare-head{
+  display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;
+  align-items:flex-end;margin:4px 0 16px;
+}
+.compare-head h2{margin:0;font-size:20px;letter-spacing:-.02em}
+.note{max-width:680px;margin:6px 0 0;font-size:12.5px;line-height:1.55;color:var(--dim)}
+.note-inline{font-size:11.5px;color:var(--dim)}
+.compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:18px}
+.comp-card{
+  position:relative;overflow:hidden;padding:18px;border:1px solid var(--line);
+  border-radius:16px;background:linear-gradient(165deg,rgba(26,29,44,.78),rgba(12,14,23,.7));
+  backdrop-filter:blur(12px);
+}
+.comp-card::after{
+  content:"";position:absolute;right:-46px;top:-58px;width:150px;height:150px;
+  background:radial-gradient(circle,rgba(139,92,246,.2),transparent 66%);pointer-events:none;
+}
+.comp-card-head{position:relative;display:flex;gap:10px;justify-content:space-between;align-items:flex-start}
+.comp-name{display:block;font-size:15px;font-weight:700;letter-spacing:-.015em;word-break:break-word}
+.comp-sub{display:block;margin-top:3px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+.cmp-finish{display:flex;flex-wrap:wrap;gap:9px;align-items:baseline;margin:15px 0 6px}
+.cmp-finish .k{
+  font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);
+}
+.cmp-finish .v{font-size:27px;font-weight:800;letter-spacing:-.035em;line-height:1}
+.cmp-finish .rank-no{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.cmp-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.cmp-stat{
+  min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;
+  background:rgba(255,255,255,.022);
+}
+.cmp-stat .k{
+  display:block;font-size:9px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.cmp-stat .v{
+  display:block;margin-top:3px;font-family:var(--mono);font-size:12.5px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.panel{
+  margin:18px 0;padding:16px;border:1px solid var(--line);border-radius:16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.012));
+}
+.panel .chart-head{padding:0 0 10px}
+.compare-wrap{max-height:none}
+.cmp-point{stroke-width:2;transition:filter .15s}
+.cmp-point:hover{filter:brightness(1.6)}
+.cmp-point.hit{fill:rgba(52,211,153,.25);stroke:#34d399}
+.cmp-point.miss{fill:rgba(245,158,11,.2);stroke:#f59e0b}
+.target-line{stroke:#22d3ee;stroke-width:1.5;stroke-dasharray:5 5}
 .run{
   border:1px solid var(--line);border-radius:18px;overflow:hidden;
   background:linear-gradient(165deg,rgba(26,29,44,.8),rgba(12,14,23,.74));
@@ -461,6 +600,24 @@ _PAGE_JS = """
   var cards = Array.prototype.slice.call(document.querySelectorAll('.run'));
   var empty = document.getElementById('empty');
   var filter = 'all';
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.view-tab'));
+  var campaignFilters = document.getElementById('campaign-filters');
+  var viewCampaigns = document.getElementById('view-campaigns');
+  var viewCompare = document.getElementById('view-compare');
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var compare = tab.dataset.view === 'compare';
+      tabs.forEach(function (t) {
+        var active = t === tab;
+        t.classList.toggle('is-active', active);
+        t.setAttribute('aria-selected', String(active));
+      });
+      viewCampaigns.hidden = compare;
+      viewCompare.hidden = !compare;
+      campaignFilters.hidden = compare;
+    });
+  });
 
   function applyFilters() {
     var q = (search.value || '').trim().toLowerCase();
@@ -824,6 +981,206 @@ def _run_card(summary: RunSummary, index: int, open_card: bool = False) -> str:
     )
 
 
+def _short_competition(name: str, limit: int = 24) -> str:
+    """Trim a long competition ref for compact chart labels."""
+    return name if len(name) <= limit else name[: limit - 1] + "…"
+
+
+def _comparison_chart(competitions: list[CompetitionSummary]) -> str:
+    """Scatter of best finish (percentile) against total LLM spend per competition."""
+    esc = html.escape
+    plotted = [c for c in competitions if c.best_percentile is not None]
+    if not plotted:
+        return '<div class="chart-empty">No leaderboard positions recorded yet.</div>'
+
+    width, height = 760, 300
+    left, right, top, bottom = 64, 26, 28, 52
+    spends = [c.spend_usd for c in plotted]
+    x_lo, x_hi = min(spends), max(spends)
+    if x_hi - x_lo < 0.01:
+        pad = max(0.25, x_hi * 0.25)
+    else:
+        pad = (x_hi - x_lo) * 0.18
+    x_lo, x_hi = max(0.0, x_lo - pad), x_hi + pad
+    if x_hi - x_lo < 1e-9:
+        x_hi = x_lo + 1.0
+
+    def xy(comp: CompetitionSummary) -> tuple[float, float]:
+        """Map (spend, percentile) to SVG coordinates; top is better."""
+        x = left + (comp.spend_usd - x_lo) / (x_hi - x_lo) * (width - left - right)
+        y = top + min(100.0, max(0.0, comp.best_percentile or 0.0)) / 100 * (
+            height - top - bottom)
+        return round(x, 1), round(y, 1)
+
+    parts = [
+        f'<svg viewBox="0 0 {width} {height}" role="img" '
+        'aria-label="Best finish percentile versus LLM spend by competition">',
+        f'<text class="axis-label" x="{left}" y="16">best finish</text>',
+        f'<text class="axis-label" x="{width - right}" y="{height - 10}" '
+        'text-anchor="end">LLM spend →</text>',
+    ]
+    for pct in range(0, 101, 20):
+        y = top + pct / 100 * (height - top - bottom)
+        parts.append(f'<line class="grid-line" x1="{left}" y1="{y}" '
+                     f'x2="{width - right}" y2="{y}"/>')
+        parts.append(f'<text class="axis-label" x="{left - 10}" y="{y + 4}" '
+                     f'text-anchor="end">{pct}%</text>')
+    target_y = top + 20 / 100 * (height - top - bottom)
+    parts.append(f'<line class="target-line" x1="{left}" y1="{target_y}" '
+                 f'x2="{width - right}" y2="{target_y}"/>')
+    parts.append(f'<text class="axis-label" x="{width - right - 2}" '
+                 f'y="{target_y - 6}" text-anchor="end" fill="#22d3ee">goal top 20%</text>')
+    for step in range(4):
+        value = x_lo + (x_hi - x_lo) * step / 3
+        x = left + (width - left - right) * step / 3
+        parts.append(f'<text class="axis-label" x="{x}" y="{height - 30}" '
+                     f'text-anchor="middle">${value:.2f}</text>')
+
+    for c in plotted:
+        x, y = xy(c)
+        target = c.target_percentile or 20
+        hit = "hit" if (c.best_percentile or 100) <= target else "miss"
+        rank = (f"{c.best_rank}/{c.best_total}" if c.best_rank is not None
+                and c.best_total is not None else "unranked")
+        label = _short_competition(c.competition, 22)
+        title = (f"{c.competition} · top {(c.best_percentile or 0):.2f}% · {rank} · "
+                 f"${c.spend_usd:.2f} spend · {c.campaigns} campaigns")
+        label_y = y - 13 if y > top + 24 else y + 24
+        parts.append(
+            f'<circle class="cmp-point {hit}" cx="{x}" cy="{y}" r="7">'
+            f'<title>{esc(title)}</title></circle>'
+        )
+        parts.append(
+            f'<text class="axis-label" x="{x}" y="{label_y}" text-anchor="middle" '
+            f'fill="#c9cede">{esc(label)}</text>'
+        )
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _competition_card(c: CompetitionSummary) -> str:
+    """One competition aggregate card with best finish, target bar, and totals."""
+    esc = html.escape
+    target = c.target_percentile or 20
+    has_rank = c.best_percentile is not None
+    hit = has_rank and (c.best_percentile or 100) <= target
+    pct = max(0.0, min(100.0, c.best_percentile)) if c.best_percentile is not None else 0.0
+    rank_no = (f"{c.best_rank}/{c.best_total}" if c.best_rank is not None
+               and c.best_total is not None else "no rank")
+    if has_rank:
+        head = (
+            f'<span><span class="strong">{rank_no}</span>'
+            f' · top <span class="rank-pct">{(c.best_percentile or 0):.2f}%</span></span>'
+            f'<span>target top {target}%</span>'
+        )
+    else:
+        head = ('<span><span class="strong">Position not recorded</span></span>'
+                f'<span>target top {target}%</span>')
+    bar = (
+        f'<span class="rank{" is-hit" if hit else ""}">'
+        f'<span class="rank-head">{head}</span><span class="track">'
+        f'<span class="fill" style="width:{pct if has_rank else 0:.2f}%"></span>'
+        f'<span class="goal" style="left:{target}%" title="Goal: top {target}%"></span>'
+        '</span></span>'
+    )
+    finish = f"top {c.best_percentile:.1f}%" if has_rank else "—"
+    verdict = ("goal met" if hit else
+               (f"target top {target}%" if has_rank else "no LB yet"))
+    verdict_cls = "live" if hit else "ghost"
+    stats = "".join([
+        f'<span class="cmp-stat"><span class="k">Best CV</span>'
+        f'<span class="v">{_fmt(c.best_cv)}</span></span>',
+        f'<span class="cmp-stat"><span class="k">Best LB</span>'
+        f'<span class="v">{_fmt(c.best_lb)}</span></span>',
+        f'<span class="cmp-stat"><span class="k">LLM spend</span>'
+        f'<span class="v">${c.spend_usd:.2f}</span></span>',
+        f'<span class="cmp-stat"><span class="k">Real subs</span>'
+        f'<span class="v">{c.real_submissions}</span></span>',
+        f'<span class="cmp-stat"><span class="k">Scored</span>'
+        f'<span class="v">{c.scored}/{c.candidates}</span></span>',
+        f'<span class="cmp-stat"><span class="k">Rounds</span>'
+        f'<span class="v">{c.rounds}</span></span>',
+    ])
+    return (
+        '<article class="comp-card">'
+        '<div class="comp-card-head"><span>'
+        f'<span class="comp-name">{esc(c.competition)}</span>'
+        f'<span class="comp-sub">{c.campaigns} campaign'
+        f'{"s" if c.campaigns != 1 else ""} · {c.live} live / {c.dry} dry</span></span>'
+        f'<span class="pill pill-{verdict_cls}">{verdict}</span></div>'
+        f'<div class="cmp-finish"><span class="k">Best finish</span>'
+        f'<span class="v{" good" if hit else ""}">{finish}</span>'
+        f'<span class="rank-no">{rank_no}</span></div>'
+        f'{bar}<div class="cmp-stats">{stats}</div></article>'
+    )
+
+
+def _comparison_table(competitions: list[CompetitionSummary]) -> str:
+    """Sortable head-to-head table across competitions."""
+    esc = html.escape
+    rows = []
+    for c in competitions:
+        pct = "" if c.best_percentile is None else f"{c.best_percentile:.6f}"
+        finish = "-" if c.best_percentile is None else f"top {c.best_percentile:.2f}%"
+        cv = "" if c.best_cv is None else f"{c.best_cv:.6f}"
+        lb = "" if c.best_lb is None else f"{c.best_lb:.6f}"
+        rows.append(
+            '<tr>'
+            f'<td>{esc(c.competition)}</td>'
+            f'<td class="num" data-v="{c.campaigns}">{c.campaigns}</td>'
+            f'<td class="num" data-v="{pct}">{finish}</td>'
+            f'<td class="num" data-v="{cv}">{_fmt(c.best_cv)}</td>'
+            f'<td class="num" data-v="{lb}">{_fmt(c.best_lb)}</td>'
+            f'<td class="num" data-v="{c.real_submissions}">{c.real_submissions}</td>'
+            f'<td class="num" data-v="{c.mock_submissions}">{c.mock_submissions}</td>'
+            f'<td class="num" data-v="{c.scored}">{c.scored}/{c.candidates}</td>'
+            f'<td class="num" data-v="{c.failed}">{c.failed}</td>'
+            f'<td class="num" data-v="{c.rounds}">{c.rounds}</td>'
+            f'<td class="num" data-v="{c.spend_usd:.4f}">${c.spend_usd:.2f}</td>'
+            '</tr>'
+        )
+    return (
+        '<table class="cand-table"><thead><tr>'
+        '<th>competition</th>'
+        '<th class="num" data-type="num">campaigns</th>'
+        '<th class="num" data-type="num">best finish</th>'
+        '<th class="num" data-type="num">best CV</th>'
+        '<th class="num" data-type="num">best LB</th>'
+        '<th class="num" data-type="num">real subs</th>'
+        '<th class="num" data-type="num">mock subs</th>'
+        '<th class="num" data-type="num">scored</th>'
+        '<th class="num" data-type="num">failed</th>'
+        '<th class="num" data-type="num">rounds</th>'
+        '<th class="num" data-type="num">spend</th>'
+        f'</tr></thead><tbody>{"".join(rows)}</tbody></table>'
+    )
+
+
+def _render_compare(competitions: list[CompetitionSummary]) -> str:
+    """Comparison view: aggregate cards, finish-vs-spend chart, head-to-head table."""
+    if not competitions:
+        return ('<div class="empty-state"><div><strong>No competitions yet</strong>'
+                'Run a campaign to compare results here.</div></div>')
+    cards = "".join(_competition_card(c) for c in competitions)
+    chart = _comparison_chart(competitions)
+    return (
+        '<div class="compare-head"><div>'
+        '<h2>Competition head-to-head</h2>'
+        '<p class="note">Best finish percentile is the only normalized comparison. '
+        'CV and LB scores use a per-competition metric, so compare those columns '
+        'within a competition, not across competitions. The scatter shows whether extra '
+        'LLM spend bought a better finish.</p></div>'
+        f'<span class="pill pill-ghost">{len(competitions)} competitions</span></div>'
+        f'<div class="compare-grid">{cards}</div>'
+        '<div class="panel"><div class="chart-head"><h3>Best finish vs LLM spend</h3>'
+        '<span class="note-inline">lower-left is better</span></div>'
+        f'<div class="chart">{chart}</div></div>'
+        '<div class="cand-head"><h3>Head-to-head table</h3>'
+        '<span>click a column to sort</span></div>'
+        f'<div class="table-wrap compare-wrap">{_comparison_table(competitions)}</div>'
+    )
+
+
 def render_html(summaries: list[RunSummary], generated_at: str) -> str:
     """Self-contained dark report: aggregates, filters, run cards, charts, tables."""
     esc = html.escape
@@ -863,6 +1220,8 @@ def render_html(summaries: list[RunSummary], generated_at: str) -> str:
     elif summaries:
         featured = max(range(len(summaries)), key=lambda i: summaries[i].candidates)
     cards = "".join(_run_card(s, i, i == featured) for i, s in enumerate(summaries))
+    competition_summaries = aggregate_competitions(summaries)
+    compare_html = _render_compare(competition_summaries)
     head = (
         "<!doctype html>\n"
         '<html lang="en"><head><meta charset="utf-8">'
@@ -880,6 +1239,15 @@ def render_html(summaries: list[RunSummary], generated_at: str) -> str:
         f'{len(summaries)} campaign{"s" if len(summaries) != 1 else ""}</div>'
         f'<div class="stats">{stats}</div></header>'
         '<div class="toolbar">'
+        '<div class="view-tabs" role="tablist" aria-label="Report view">'
+        f'<button type="button" class="view-tab is-active" data-view="campaigns" '
+        f'role="tab" aria-selected="true">Campaigns '
+        f'<span class="n">{len(summaries)}</span></button>'
+        f'<button type="button" class="view-tab" data-view="compare" '
+        f'role="tab" aria-selected="false">Compare '
+        f'<span class="n">{len(competition_summaries)}</span></button>'
+        '</div>'
+        '<div class="filters" id="campaign-filters">'
         '<div class="chips" role="group" aria-label="Filter by competition">'
         f'{"".join(chips)}</div>'
         '<label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
@@ -887,12 +1255,15 @@ def render_html(summaries: list[RunSummary], generated_at: str) -> str:
         '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>'
         '<input id="search" type="search" placeholder="Search runs, competitions, models…" '
         'aria-label="Search campaigns"></label>'
-        '</div><main>'
+        '</div></div><main>'
     )
     tail = (
+        '<section class="view" id="view-campaigns">'
         f'<div class="grid" id="runs">{cards}</div>'
         '<div class="empty-state" id="empty" hidden><div><strong>No matching campaigns'
         '</strong>Try a different competition filter or search term.</div></div>'
+        '</section>'
+        f'<section class="view" id="view-compare" hidden>{compare_html}</section>'
         '</main><footer class="foot">Slayer · LLM judgment on deterministic scaffolding · '
         'self-contained report, no external assets</footer></div>'
         '<div class="tip" id="tip" role="tooltip" hidden></div>'

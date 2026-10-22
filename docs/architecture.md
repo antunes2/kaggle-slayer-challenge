@@ -34,7 +34,7 @@ Consequences you can rely on:
 src/slayer/
 ├── cli/main.py        # typer app: run, resume, init, status, journal, leaderboard,
 │                      # competitions, dashboard
-├── dashboard.py       # cross-run summaries → terminal table / self-contained HTML
+├── dashboard.py       # run + per-competition summaries → terminal table / dark HTML
 ├── config.py          # slayer.yaml + agents.yaml + .env → pydantic settings
 ├── llm/client.py      # OpenRouter client: retries (429-aware; long backoff on
 │                      # connection blips), JSON extraction,
