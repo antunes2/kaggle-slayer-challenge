@@ -68,7 +68,14 @@ across all resumes**, counted from the registry):
 3. On failure: **one repair attempt** with the error fed back; second failure
    exhausts the step.
 4. After each scored candidate: `review_phase` + `submit_phase` run.
-5. After the loop: one bounded repair for an unactioned REVISE verdict, if any.
+5. After the loop: one bounded repair for an unactioned REVISE verdict, if any
+   (skipped when the budget stopped the loop).
+6. **Blend step** (design 14, no LLM — runs even after a budget stop): the
+   reviewer-approved candidates with OOF predictions are hill-climbed (Caruana greedy
+   selection with replacement, mean per-fold metric on the shared folds). A blend of ≥ 2
+   members that beats the best single is registered as an `approved` `Blend` candidate
+   (weighted-average submission), then SUBMIT's gates run. Each distinct pool is
+   evaluated once (`blend.evaluated`).
 
 Budget: before every proposal, cumulative LLM cost ≥ `run.budget_usd` →
 `budget.warning` + stop iterating. Cumulative = journal sum of `agent.call.cost_usd`
@@ -143,7 +150,8 @@ baseline re-proposes — resume is the crash-repair path — until the 3-attempt
 
 ```
 proposed → scored → approved → submitted → (lb recorded by MONITOR)
-   │          │
+   │          │         ▲
+   │          │         └── Blend candidates enter here directly (all members approved)
    │          └── rejected / stays scored with REVISE feedback (one bounded repair)
    └── failed (harness error/timeout/syntax — counts toward the step's 3 attempts)
 ```
@@ -156,4 +164,4 @@ with `cost_estimated` flag), `agent.output`, `candidate.added`,
 `candidate.status_changed` (carries `submission_id` for real submissions),
 `candidate.scored`, `candidate.lb_scored`, `submission.accepted` (real — quota),
 `submission.mocked`, `budget.warning`, `iterate.skipped`, `monitor.position`,
-`reentry.decision`, `roadmap.extended`.
+`reentry.decision`, `roadmap.extended`, `blend.evaluated`.

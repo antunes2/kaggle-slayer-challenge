@@ -5,7 +5,7 @@
 > structure: `docs/architecture.md` (system), `docs/loop.md` (phases),
 > `docs/usage.md` (operating). Master plan: `docs/plan/00-implementation-plan.md`.
 
-*Updated: 2026-10-22 (step 4.2 — bounded re-entry rounds)*
+*Updated: 2026-10-22 (4.2 re-entry rounds; 4.3 OOF blender + researcher A/B)*
 
 ## Where we are
 
@@ -21,7 +21,7 @@ implemented and unit-tested, **not yet live-validated**.
 | Phase 2 — planner/researcher/reviewer, mock submission end-to-end | ✅ live |
 | Phase 2b — first real Kaggle submission | ✅ submission `57503219`, LB **0.94149** → est. ~2545/3577 (**top 71%**) — target top-20% NOT met |
 | Phase 3 — iteration engine, resume, timeout handling | ✅ live |
-| Phase 4 — monitoring (4.1 LB + position; 4.2 gap signal + bounded re-entry rounds) | ✅ (4.2 live validation pending) |
+| Phase 4 — monitoring (4.1 LB + position; 4.2 gap signal + re-entry rounds; 4.3 OOF blender) | ✅ (4.2 live validation in progress; 4.3 pending) |
 | Phase 5 — daemon/attach/chat, agentic orchestrator | ⬜ |
 
 ## Live evidence (closed playground comp `playground-series-s6e9`)
@@ -53,22 +53,24 @@ artifacts: the gate re-enters with `gap +0.00491`, ratio 13.9×.
 - `Q0003` — Ctrl+C leaves run status `active` (graceful SIGINT pending); orphaned
   harness processes can outlive their budget if the parent is killed mid C fit.
 - `Q0004` — competition discovery UX (`slayer competitions` proposed).
-- Harness keeps no OOF/test predictions → no cross-candidate blending.
+- OOF blending only for binary-probability metrics and regression; pre-4.3 candidates have no OOF.
 - Monitor leaderboard matching is username heuristic.
 
 ## Next steps (recommended order)
 
-1. **Live-validate 4.2** (needs user go-ahead): `slayer resume 20261022-001955-…` on
-   the finished run — re-entry kicks in from its real LB gap; dry-run by default. Watch:
-   does the planner's assessment use the gap/spread signal and propose structural
-   steps; do round steps land (especially a working CatBoost)?
-2. **OOF persistence + deterministic blender** — harness saves OOF/test predictions;
-   a code-owned hill-climb blend over scored candidates (typically +0.001–0.003 on
-   playgrounds; makes "ensemble" steps cheap and reliable).
-3. **Researcher model A/B** — change only `ml_researcher` in `config/agents.yaml`;
-   compare failed-candidate count (CatBoost contract errors are codegen quality).
-4. Graceful SIGINT (Q0003.2), `slayer competitions` (Q0004) — small ops steps.
-5. **Phase 5** — daemon + `attach`, `slayer chat`, agentic orchestrator.
+1. **Finish the 4.2 live check** — dry-run fork `20261022-001955-…-reentry-dry`
+   (resumed from a git worktree at the 4.2 commit). Round 1 planner output already
+   observed: it cited the 14× gap/spread ratio and planned a CatBoost contract fix,
+   in-estimator target encoding, stacking, and a class-weight ablation.
+2. **Live-validate 4.3 + researcher A/B** with one fresh dry run on the same comp
+   (`slayer run playground-series-s6e9`): first run with OOF persistence (blend step
+   active) and `claude-sonnet-5.5` as researcher; compare against the Q0001 baseline.
+3. **`slayer competitions` browse command (Q0004)** — before the first
+   active-competition campaign, which is when picking a comp actually matters.
+4. **First active-competition campaign** — fresh `--live` run, approve-first; re-entry
+   makes it a multi-day campaign ("resume once per day").
+5. Graceful SIGINT (Q0003.2); then **Phase 5** — daemon + `attach`, `slayer chat`,
+   agentic orchestrator.
 
 ## Conventions for a new session
 

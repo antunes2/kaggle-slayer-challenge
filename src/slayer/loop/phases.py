@@ -447,9 +447,11 @@ def iterate_phase(ctx: RunContext) -> None:
         )
         return proposal
 
+    budget_hit = False
     for step in pending:
         if _budget_out(ctx):
-            return
+            budget_hit = True
+            break
         ctx.say(f"  iterating step {step.priority}: {step.title}")
         proposal = propose(step)
         record, result = _evaluate_proposal(ctx, plan, proposal, protocol, step)
@@ -459,7 +461,8 @@ def iterate_phase(ctx: RunContext) -> None:
                 "— one repair attempt"
             )
             if _budget_out(ctx):
-                return
+                budget_hit = True
+                break
             failure_note = f"Your previous attempt failed:\n{(result.error or '')[-600:]}"
             proposal = propose(step, extra=failure_note)
             record, result = _evaluate_proposal(ctx, plan, proposal, protocol, step)
@@ -477,7 +480,13 @@ def iterate_phase(ctx: RunContext) -> None:
 
     if not pending:
         ctx.say("  no pending roadmap steps")
-    _run_revision(ctx, plan, protocol, propose)
+    if not budget_hit:
+        _run_revision(ctx, plan, protocol, propose)
+
+    from slayer.loop.blending import blend_phase  # lazy: blending imports this module
+
+    blend_phase(ctx)
+    submit_phase(ctx)
 
 
 def review_phase(ctx: RunContext) -> None:

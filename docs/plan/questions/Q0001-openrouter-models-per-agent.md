@@ -44,3 +44,10 @@ better model should mainly *reduce variance* (fewer broken candidates, better
 reviews) and raise the idea ceiling — but the evidence so far says the bigger
 percentile gains come from iteration depth + ensembles + real LB feedback, not
 model tier.
+
+**Update 2026-10-22 — A/B started:** `ml_researcher` switched from `openai/gpt-5-mini`
+to `anthropic/claude-sonnet-5.5` ($2/M in, $10/M out; structured-output ping verified,
+cost catalog-estimated). Baseline to compare against (run `20261022-001955`, gpt-5-mini):
+9 candidates, 3 failed + 1 stuck, 4/4 CatBoost attempts broken on contract errors, CV
+0.94147–0.94183. Measure on the next fresh run: failed-candidate count, repair cycles,
+CV trajectory, LLM spend.

@@ -11,6 +11,7 @@ import traceback
 from hashlib import sha256
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold, StratifiedKFold
 
@@ -49,19 +50,29 @@ def _positive_class(y: pd.Series) -> object:
     return sorted(y.dropna().astype(str).unique())[-1]
 
 
-def _score_fold(
-    model, X_val, y_val, metric: ResolvedMetric, problem_type: str
-) -> float:
-    """Score one fold with the resolved metric, using proba when required."""
+def _fold_predictions(model, X_val, y_val, metric: ResolvedMetric, problem_type: str):
+    """Predictions in the form the metric consumes (positive-class proba for binary AUC)."""
     if metric.needs_proba and problem_type == "binary_classification":
         if hasattr(model, "predict_proba"):
             classes = [str(c) for c in model.classes_]
             positive = _positive_class(y_val)
-            proba = model.predict_proba(X_val)[:, classes.index(str(positive))]
-            return float(metric.scorer(y_val, proba))
+            return model.predict_proba(X_val)[:, classes.index(str(positive))]
     if metric.needs_proba and hasattr(model, "predict_proba"):
-        return float(metric.scorer(y_val, model.predict_proba(X_val)))
-    return float(metric.scorer(y_val, model.predict(X_val)))
+        return model.predict_proba(X_val)
+    return model.predict(X_val)
+
+
+def _score_fold(
+    model, X_val, y_val, metric: ResolvedMetric, problem_type: str
+) -> tuple[float, np.ndarray]:
+    """Score one fold with the resolved metric; also return the predictions used."""
+    preds = np.asarray(_fold_predictions(model, X_val, y_val, metric, problem_type))
+    return float(metric.scorer(y_val, preds)), preds
+
+
+def _blendable(preds: np.ndarray) -> bool:
+    """Whether fold predictions can be averaged across candidates (1-D numeric)."""
+    return preds.ndim == 1 and np.issubdtype(preds.dtype, np.number)
 
 
 def _predict_submission(
@@ -151,13 +162,21 @@ def _execute(config: dict, candidate_dir: Path) -> CVResult:
         splitter = splitter_cls(
             n_splits=k_folds, shuffle=True, random_state=int(config["seed"])
         )
+        oof = np.full(len(X), np.nan, dtype=np.float64)
+        fold_ids = np.full(len(X), -1, dtype=np.int8)
+        blendable = True
         for i, (train_idx, val_idx) in enumerate(splitter.split(X, y)):
             fold_start = time.time()
             model = pipeline.build_model()
             model.fit(X.iloc[train_idx], y.iloc[train_idx])
-            score = _score_fold(
+            score, preds = _score_fold(
                 model, X.iloc[val_idx], y.iloc[val_idx], metric, problem_type
             )
+            fold_ids[val_idx] = i
+            if blendable and _blendable(preds):
+                oof[val_idx] = preds
+            else:
+                blendable = False
             fold_time = time.time() - fold_start
             folds.append(FoldScore(fold=i, score=round(score, 6)))
             fold_times.append(round(fold_time, 2))
@@ -192,6 +211,9 @@ def _execute(config: dict, candidate_dir: Path) -> CVResult:
         )
         submission_path = candidate_dir / "submission.csv"
         out_frame.to_csv(submission_path, index=False)
+        if blendable:
+            np.save(candidate_dir / "oof.npy", oof)
+            np.save(candidate_dir / "fold_ids.npy", fold_ids)
 
         result = CVResult(
             candidate_id=candidate_id,

@@ -104,7 +104,7 @@ defaults:
 orchestrator: {model: google/gemini-2.5-flash-lite}
 planner: {}                           # inherits defaults
 data_analyst: {model: google/gemini-2.5-flash-lite}
-ml_researcher: {model: openai/gpt-5-mini}   # highest-leverage model to upgrade
+ml_researcher: {model: anthropic/claude-sonnet-5.5}   # upgraded from gpt-5-mini (A/B)
 reviewer: {temperature: 0.0}          # adversarial, deterministic
 ```
 

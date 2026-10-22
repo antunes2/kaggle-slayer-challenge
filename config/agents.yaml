@@ -9,6 +9,8 @@ planner: {}
 data_analyst:
   model: google/gemini-2.5-flash-lite
 ml_researcher:
-  model: openai/gpt-5-mini
+  # A/B (Q0001 note): upgraded from openai/gpt-5-mini — baseline run 20261022-001955
+  # had 4/4 CatBoost candidates fail on contract errors. ~$2/M in, $10/M out.
+  model: anthropic/claude-sonnet-5.5
 reviewer:
   temperature: 0.0

@@ -40,9 +40,11 @@ src/slayer/
 ├── analysis/          # deterministic profiler → profile.{json,md} + markdown renders
 ├── agents/            # Agent base (prompt + schema + journaling) + the five roles
 ├── loop/              # engine (phase machine + bounded re-entry rounds), phases (the
-│                      # 9 handlers), campaign (re-entry gate + REPLAN), data cache
-├── cv/                # metric registry, the CV harness (sandboxed subprocess),
-│                      # runner (timeout kill, partial results)
+│                      # 9 handlers), campaign (re-entry gate + REPLAN), blending
+│                      # (OOF blend step), data cache
+├── cv/                # metric registry, the CV harness (sandboxed subprocess; persists
+│                      # OOF predictions), runner (timeout kill, partial results),
+│                      # blend (deterministic hill-climb over OOF)
 ├── submissions.py     # SubmissionSink: MockSink (default) | KaggleSink (real)
 ├── schemas/           # pydantic contracts for every agent output
 └── workspace/         # RunStore (run dirs), Journal (JSONL), CandidateRegistry (SQLite)
@@ -87,7 +89,8 @@ Everything lands in runs/<run_id>/:
 ├── workspace/
 │   ├── data/           # competition CSVs + manifest.json
 │   ├── eda/            # profile.json / profile.md
-│   ├── models/<cand>/  # pipeline.py, cv_config.json, cv_results.json, submission.csv, run.log
+│   ├── models/<cand>/  # pipeline.py, cv_config.json, cv_results.json, submission.csv, run.log,
+│   │                   # oof.npy + fold_ids.npy (blendable metrics); blends: blend.json
 │   └── reports/        # competition.json, data_report.json, feature_plan.json, strategy_plan.json
 ```
 
@@ -121,6 +124,6 @@ is the highest-leverage model to upgrade (see `docs/plan/questions/Q0001`).
   if the parent is killed (live incident logged in `docs/plan/questions/Q0003`).
 - Ctrl+C leaves the run status `active` (graceful SIGINT → paused is open, Q0003).
 - MONITOR matches leaderboard entries by username/display-name heuristics.
-- The CV harness keeps no OOF/test predictions, so cross-candidate blending is
-  impossible; ensembles must be built inside a single pipeline.
+- OOF blending covers binary-probability metrics and regression only; candidates
+  scored before design 14 have no OOF and are never blended.
 - Single foreground process; daemon + attach + chat are Phase 5.

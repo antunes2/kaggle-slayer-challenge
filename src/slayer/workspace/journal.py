@@ -30,6 +30,7 @@ class EventType:
     BUDGET_WARNING = "budget.warning"
     REENTRY_DECISION = "reentry.decision"
     ROADMAP_EXTENDED = "roadmap.extended"
+    BLEND_EVALUATED = "blend.evaluated"
 
 
 def llm_spend(journal: "Journal") -> float:

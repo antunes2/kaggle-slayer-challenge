@@ -323,7 +323,8 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 |------|-------|--------|
 | 4.1 | MONITOR phase: real LB-score collection for submitted candidates (registry `record_submission`), percentile-vs-target position reporting; `slayer leaderboard` command | ✅ ([design](designs/12-monitor.md)) |
 | 4.1b | Robustness fixes from the live resume: bounded step retries (max 3 attempts/step across resumes), CatBoost/XGBoost prompt contracts, cost estimation fallback (budget enforcement was inert), iteration terminal narration | ✅ |
-| 4.2 | Deadline awareness + bounded iterate re-entry on target shortfall (D0007): score-gap signal + CV-basis position proxy in MONITOR, deterministic re-entry gate, REPLAN (planner roadmap extension from full history), journal-based cumulative LLM budget, `--max-rounds` | ✅ ([design](designs/13-reentry-rounds.md); live validation pending) |
+| 4.2 | Deadline awareness + bounded iterate re-entry on target shortfall (D0007): score-gap signal + CV-basis position proxy in MONITOR, deterministic re-entry gate, REPLAN (planner roadmap extension from full history), journal-based cumulative LLM budget, `--max-rounds` | ✅ ([design](designs/13-reentry-rounds.md); live validation in progress) |
+| 4.3 | OOF persistence in the harness + deterministic hill-climb blender (code-owned blend step at the end of ITERATE); researcher model A/B (`ml_researcher` → claude-sonnet-5.5) | ✅ ([design](designs/14-oof-blender.md); live validation pending) |
 
 ## 12. Testing Strategy
 

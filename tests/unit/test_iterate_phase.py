@@ -177,6 +177,18 @@ def test_iterate_stops_on_budget(tmp_path) -> None:
     assert ctx.journal.read(type=EventType.BUDGET_WARNING)
 
 
+def test_iterate_still_blends_after_budget_stop(tmp_path) -> None:
+    """Blending costs no LLM, so it runs even when the budget stopped proposals."""
+    llm = FakeIterateLLM([], cost_usd=99.0)
+    ctx = _make_ctx(tmp_path, llm)
+    messages: list[str] = []
+    ctx.reporter = messages.append
+
+    iterate_phase(ctx)
+
+    assert any("blend:" in m for m in messages)
+
+
 def test_iterate_no_pending_steps_makes_no_calls(tmp_path) -> None:
     """When every roadmap step already has a candidate, iterate does nothing."""
     llm = FakeIterateLLM([])
