@@ -39,6 +39,7 @@ def test_summary_counts_and_scores(tmp_path) -> None:
     assert (s.real_submissions, s.mock_submissions, s.rounds) == (1, 1, 1)
     assert s.best_cv == 0.953 and s.best_lb == 0.949
     assert s.position == "10/100 (top 10.0%)" and s.spend_usd == 0.25
+    assert (s.rank, s.total, s.target_percentile) == (10, 100, 20)
     assert [p.lb for p in s.points] == [0.949, None, None]
 
 
@@ -49,6 +50,9 @@ def test_renderers(tmp_path) -> None:
     assert "comp-x" in text and "1r/1m" in text and "0.94900" in text
     page = render_html(summaries, "2026-10-22T00:00:00+00:00")
     assert page.startswith("<!doctype html>") and "<svg" in page and "http" not in page
+    assert 'data-filter="comp-x"' in page and "class=\"chip" in page
+    assert "Score trajectory" in page and "data-series=\"cv\"" in page
+    assert "10.00%" in page and "target top 20%" in page
 
 
 def test_cli_dashboard_writes_html(tmp_path) -> None:

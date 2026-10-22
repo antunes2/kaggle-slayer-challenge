@@ -47,7 +47,7 @@ Ctrl+C pauses safely; `resume` continues where it stopped.
 | Bonus feature | Where it lives |
 |---|---|
 | Agent that reviews the leaderboard and proposes a new plan | MONITOR reads the real leaderboard and computes the gap to the target line; the re-entry gate decides; **REPLAN** has the planner write a new roadmap from the full history, the gap, and the top public notebooks (`loop/campaign.py`, design 13) |
-| Dashboard reporting competition attempts and scores | `slayer dashboard`: terminal table of every run (candidates, failures, real/mock submissions, best CV/LB, position, spend); `--html` writes a self-contained report with per-run score charts (`dashboard.py`) |
+| Dashboard reporting competition attempts and scores | `slayer dashboard`: terminal table of every run (candidates, failures, real/mock submissions, best CV/LB, position, spend); `--html` writes a self-contained dark-mode report with aggregate stats, competition filters, expandable run cards, hoverable score charts, and sortable candidate tables (`dashboard.py`) |
 
 Beyond the brief: public-notebook scout (design 15), OOF hill-climb blender (design 14),
 external data (D0009), paired-fold submission gate, budget/quota/approval gates.

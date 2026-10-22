@@ -109,7 +109,7 @@ uv run slayer status <run_id>          # phases, LLM spend vs budget, rounds, ca
 uv run slayer journal <run_id> -l 40   # last 40 events (verdicts, submissions, decisions)
 uv run slayer leaderboard <ref>        # top 10 + your position
 uv run slayer dashboard                # every run: candidates, submissions, best CV/LB, position
-uv run slayer dashboard --html report.html   # same + charts; open report.html in a browser
+uv run slayer dashboard --html report.html   # dark interactive report; open it in a browser
 ```
 
 Files of interest in `runs/<run_id>/workspace/`:
