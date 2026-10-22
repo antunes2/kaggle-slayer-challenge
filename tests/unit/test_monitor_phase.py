@@ -17,8 +17,8 @@ class FakeMonitorKaggle:
         """Return the canned submissions list."""
         return self._submissions
 
-    def leaderboard(self, competition: str, page_size: int = 50):
-        """Return the canned leaderboard entries."""
+    def full_leaderboard(self, competition: str, target_dir=None):
+        """Return the canned full leaderboard rows."""
         return self._entries
 
     def ping(self) -> str:
@@ -39,12 +39,13 @@ class _Sub:
 
 
 class _Entry:
-    """Fake LeaderboardEntry."""
+    """Fake FullLeaderboardRow (float scores, like the real model)."""
 
-    def __init__(self, rank: int, team_name: str, score: str) -> None:
+    def __init__(self, rank: int, team_name: str, score: float, usernames=()) -> None:
         self.rank = rank
         self.team_name = team_name
         self.score = score
+        self.member_usernames = list(usernames)
 
 
 def _make_ctx(tmp_path, kaggle, target: int = 20):
@@ -69,7 +70,7 @@ def test_monitor_records_pending_lb_score(tmp_path) -> None:
     """A submitted candidate with a real LB score gets it recorded."""
     kaggle = FakeMonitorKaggle(
         submissions=[_Sub("57503219", "COMPLETE", "0.94212")],
-        entries=[_Entry(1, "someone-else", "0.94999")],
+        entries=[_Entry(1, "someone-else", 0.94999)],
     )
     ctx = _make_ctx(tmp_path, kaggle)
     messages: list[str] = []
@@ -82,7 +83,8 @@ def test_monitor_records_pending_lb_score(tmp_path) -> None:
     assert record.submission_id == "57503219"
     assert ctx.journal.read(type=EventType.CANDIDATE_LB)
     assert any("LB score 0.94212" in m for m in messages)
-    assert any("not found in" in m and "fetched entries" in m for m in messages)
+    assert any("not listed (late submission)" in m for m in messages)
+    assert any("would rank ~2/2" in m for m in messages)
 
 
 def test_monitor_skips_unscored_and_mock_submissions(tmp_path) -> None:
@@ -108,7 +110,10 @@ def test_monitor_reports_position_vs_target(tmp_path) -> None:
     """Our leaderboard entry is located and compared against the target percentile."""
     kaggle = FakeMonitorKaggle(
         submissions=[_Sub("57503219", "COMPLETE", "0.94212")],
-        entries=[_Entry(1, "rival", "0.95"), _Entry(2, "gantunes2", "0.94212")],
+        entries=[
+            _Entry(1, "rival", 0.95),
+            _Entry(2, "Gabriel A", 0.94212, usernames=["gantunes2"]),
+        ],
     )
     ctx = _make_ctx(tmp_path, kaggle, target=20)
     messages: list[str] = []
@@ -131,8 +136,8 @@ def test_monitor_reports_position_vs_target(tmp_path) -> None:
 
 def test_monitor_position_met_when_within_target(tmp_path) -> None:
     """Rank inside the target percentile reports MET."""
-    entries = [_Entry(1, "gantunes2", "0.95")]
-    entries += [_Entry(i, f"team-{i}", "0.90") for i in range(2, 7)]
+    entries = [_Entry(1, "Gabriel A", 0.95, usernames=["gantunes2"])]
+    entries += [_Entry(i, f"team-{i}", 0.90) for i in range(2, 7)]
     kaggle = FakeMonitorKaggle(entries=entries)
     ctx = _make_ctx(tmp_path, kaggle, target=20)
     messages: list[str] = []

@@ -92,10 +92,14 @@ Reads the world back:
    `submitted` with no LB score yet, match by **submission id** *or* the
    `slayer cand-NNNN:` marker in the submission description (pre-record_submission
    runs), then `record_lb`.
-2. Fetch the leaderboard (paginated; SDK print noise suppressed), find our entry
-   (username, then substring fallback), compute `percentile = rank / total * 100`,
-   journal `monitor.position`, and report met / NOT met vs `target_percentile`.
-   Not found → honest message (display name vs username, or beyond fetched pages).
+2. Download the **full public leaderboard CSV** (authoritative: every team, with
+   member usernames) — the paginated view API can't reach deep fields and the SDK's
+   page-token printing is suppressed. Find our entry by username in the member list.
+   Not listed (e.g. **late submissions to a closed comp are scored but never join
+   the LB**) → compute an **estimated position** from our best recorded LB score:
+   `rank = entries strictly better + 1`, `percentile = rank / (total + 1)`, tie band
+   reported. Journal `monitor.position`, report met / NOT met vs `target_percentile`.
+   The CSV snapshot persists as `workspace/reports/leaderboard.csv`.
 
 ## Resume semantics
 

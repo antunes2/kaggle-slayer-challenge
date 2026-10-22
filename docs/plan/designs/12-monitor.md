@@ -46,6 +46,15 @@ page), same matching as MONITOR. Requires kaggle auth; read-only.
 
 ## Retro
 
+Live hardening (2026-10-22): the paginated leaderboard approach couldn't reach our
+field (3576 teams) and username/display-name matching was fragile. Replaced by the
+**full leaderboard CSV download** — authoritative total, per-team member usernames
+(exact match, no display-name guessing), and the CSV persists as a run artifact.
+Late submissions to closed comps are scored but never listed, so MONITOR also
+computes an **estimated position** from the best recorded LB score (insert-rank
+against the listed field, tie band included). Live-validated:
+`best LB 0.94149 → rank ~2545/3577 (top 71.15%), tie band 19 — target 20% NOT met`.
+
 Implemented as designed; the natural bonus: with MONITOR in place, **all nine engine
 phases exist** — runs now reach `FINISHED` instead of pausing, and `resume` re-enters
 MONITOR for fresh leaderboard data.

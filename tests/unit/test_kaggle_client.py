@@ -139,15 +139,3 @@ def test_submissions_maps_status_enum_name() -> None:
     assert len(infos) == 1
     assert infos[0].status == "COMPLETE"
     assert infos[0].public_score == "0.84321"
-
-
-def test_leaderboard_enumerates_ranks() -> None:
-    api = SimpleNamespace(
-        competition_leaderboard_view=lambda comp, page_size=50, page_token=None: [
-            SimpleNamespace(team_name="team-a", score="0.9"),
-            None,
-            SimpleNamespace(team_name="team-b", score="0.8"),
-        ]
-    )
-    entries = KaggleClient(api).leaderboard("comp")
-    assert [(e.rank, e.team_name) for e in entries] == [(1, "team-a"), (2, "team-b")]

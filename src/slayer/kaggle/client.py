@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import contextlib
+import csv
 import io
 import os
-import re
+import tempfile
+import zipfile
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class KaggleError(Exception):
@@ -47,10 +49,14 @@ class SubmissionInfo(BaseModel):
     date: str | None = None
 
 
-class LeaderboardEntry(BaseModel):
+class FullLeaderboardRow(BaseModel):
+    """One row of the full public leaderboard CSV (includes member usernames)."""
+
     rank: int
+    team_id: str | None = None
     team_name: str | None = None
-    score: str | None = None
+    score: float | None = None
+    member_usernames: list[str] = Field(default_factory=list)
 
 
 def _text(value: Any) -> str | None:
@@ -247,38 +253,64 @@ class KaggleClient:
             )
         return infos
 
-    def leaderboard(
-        self, competition: str, page_size: int = 100, max_pages: int = 10
-    ) -> list[LeaderboardEntry]:
-        """View the leaderboard, paginating up to max_pages.
+    def download_leaderboard(self, competition: str, target_dir: Path) -> Path:
+        """Download the full public leaderboard zip into target_dir."""
+        target_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self._api.competition_leaderboard_download(
+                    competition=competition, path=str(target_dir), quiet=True
+                )
+        except Exception as exc:
+            raise KaggleError(f"leaderboard download failed: {exc}") from exc
+        zips = sorted(target_dir.glob("*.zip"))
+        if not zips:
+            raise KaggleError(f"expected leaderboard zip in {target_dir}, not found")
+        return zips[-1]
 
-        The kaggle SDK prints the next-page token to stdout instead of returning
-        it, so we capture stdout during each page call and parse the token from
-        it — and the SDK's noise never reaches the user's terminal.
+    def full_leaderboard(
+        self, competition: str, target_dir: Path | None = None
+    ) -> list[FullLeaderboardRow]:
+        """Download and parse the full leaderboard CSV (authoritative: all teams).
+
+        When target_dir is given the extracted CSV is kept there as
+        leaderboard.csv (run artifact); otherwise a temp dir is used.
         """
-        entries: list[LeaderboardEntry] = []
-        page_token: str | None = None
-        for _ in range(max_pages):
-            captured = io.StringIO()
-            with contextlib.redirect_stdout(captured):
-                items = (
-                    self._api.competition_leaderboard_view(
-                        competition, page_size=page_size, page_token=page_token
-                    )
-                    or []
-                )
-            for item in items:
-                if item is None:
-                    continue
-                entries.append(
-                    LeaderboardEntry(
-                        rank=len(entries) + 1,
-                        team_name=_text(getattr(item, "team_name", None)),
-                        score=_text(getattr(item, "score", None)),
-                    )
-                )
-            match = re.search(r"Next Page Token = (\S+)", captured.getvalue())
-            page_token = match.group(1) if match else None
-            if not page_token:
-                break
-        return entries
+        keep_dir = target_dir
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = self.download_leaderboard(competition, Path(keep_dir or tmp))
+            with zipfile.ZipFile(zip_path) as zf:
+                member = zf.namelist()[0]
+                rows: list[FullLeaderboardRow] = []
+                with zf.open(member) as fh:
+                    reader = csv.DictReader(io.TextIOWrapper(fh, encoding="utf-8-sig"))
+                    for raw in reader:
+                        score_raw = (raw.get("Score") or "").strip()
+                        try:
+                            score = float(score_raw) if score_raw else None
+                        except ValueError:
+                            score = None
+                        try:
+                            rank = int(str(raw.get("Rank") or "").strip())
+                        except ValueError:
+                            rank = 0
+                        usernames = [
+                            u.strip().lower()
+                            for u in (raw.get("TeamMemberUserNames") or "").split(",")
+                            if u.strip()
+                        ]
+                        rows.append(
+                            FullLeaderboardRow(
+                                rank=rank,
+                                team_id=(raw.get("TeamId") or "").strip() or None,
+                                team_name=(raw.get("TeamName") or "").strip() or None,
+                                score=score,
+                                member_usernames=usernames,
+                            )
+                        )
+                if keep_dir is not None:
+                    with zf.open(member) as src, (Path(keep_dir) / "leaderboard.csv").open(
+                        "wb"
+                    ) as dst:
+                        dst.write(src.read())
+        return rows

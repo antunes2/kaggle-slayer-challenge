@@ -1,9 +1,9 @@
 from slayer.kaggle.client import (
     CompetitionFileInfo,
     CompetitionInfo,
+    FullLeaderboardRow,
     KaggleClient,
     KaggleError,
-    LeaderboardEntry,
     SubmissionInfo,
     SubmissionRef,
 )
@@ -14,7 +14,7 @@ __all__ = [
     "CompetitionInfo",
     "KaggleClient",
     "KaggleError",
-    "LeaderboardEntry",
+    "FullLeaderboardRow",
     "QuotaManager",
     "SubmissionInfo",
     "SubmissionRef",

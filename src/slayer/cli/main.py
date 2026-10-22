@@ -369,9 +369,8 @@ def status(
 def leaderboard(
     competition: str = typer.Argument(..., help="Kaggle competition ref"),
     env_file: Path = typer.Option(Path(".env"), "--env-file"),
-    page_size: int = typer.Option(20, "--page-size", help="Entries to fetch"),
 ) -> None:
-    """Show the competition leaderboard and our position on it."""
+    """Show the competition leaderboard (full download) and our position on it."""
     secrets = load_secrets(env_file)
     if not secrets.kaggle_api_token:
         typer.secho("KAGGLE_API_TOKEN missing — cannot read the leaderboard.", fg="red")
@@ -382,23 +381,22 @@ def leaderboard(
     except KaggleError as exc:
         typer.secho(f"kaggle authentication failed: {exc}", fg="red")
         raise typer.Exit(1) from exc
-    entries = kaggle.leaderboard(competition, page_size=page_size)
-    if not entries:
+    try:
+        rows = kaggle.full_leaderboard(competition)
+    except KaggleError as exc:
+        typer.secho(f"leaderboard unavailable: {exc}", fg="red")
+        raise typer.Exit(1) from exc
+    if not rows:
         typer.echo("No leaderboard entries (competition may not have one yet).")
         return
-    total = len(entries)
-    typer.secho(f"leaderboard: {competition} (showing {total} entries)", bold=True)
-    def _is_us(entry) -> bool:
-        """Match a leaderboard entry against the authenticated username."""
-        return bool(
-            entry.team_name
-            and str(entry.team_name).strip().lower() == str(username).strip().lower()
-        )
-
-    for entry in entries[:10]:
-        marker = "  <- us" if _is_us(entry) else ""
-        typer.echo(f"  {entry.rank:>4}  {str(entry.score or '-'):>10}  {entry.team_name}{marker}")
-    our = next((e for e in entries if _is_us(e)), None)
+    total = len(rows)
+    username_lower = str(username).strip().lower()
+    typer.secho(f"leaderboard: {competition} ({total} teams)", bold=True)
+    for row in rows[:10]:
+        score = row.score if row.score is not None else "-"
+        marker = "  <- us" if username_lower in row.member_usernames else ""
+        typer.echo(f"  {row.rank:>5}  {str(score):>9}  {row.team_name}{marker}")
+    our = next((row for row in rows if username_lower in row.member_usernames), None)
     if our is not None:
         typer.secho(
             f"our position: rank {our.rank}/{total} "
@@ -406,7 +404,7 @@ def leaderboard(
             fg="green",
         )
     else:
-        typer.echo(f"our entry is not on the fetched page ({total} entries)")
+        typer.echo(f"username '{username}' not found among {total} entries")
 
 
 @app.command()

@@ -119,7 +119,7 @@ class _FakeRunKaggle:
         """No prior submissions."""
         return []
 
-    def leaderboard(self, competition: str, page_size: int = 50):
+    def full_leaderboard(self, competition: str, target_dir=None):
         """Empty leaderboard."""
         return []
 

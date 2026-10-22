@@ -5,7 +5,7 @@
 > structure: `docs/architecture.md` (system), `docs/loop.md` (phases),
 > `docs/usage.md` (operating). Master plan: `docs/plan/00-implementation-plan.md`.
 
-*Updated: 2026-10-22*
+*Updated: 2026-10-22 (post leaderboard-fix session)*
 
 ## Where we are
 
@@ -18,7 +18,7 @@ has been made and accepted.
 | Phase 0 — infrastructure (config, LLM client, kaggle client, journal/registry) | ✅ |
 | Phase 1 — data collection + EDA | ✅ live |
 | Phase 2 — planner/researcher/reviewer, mock submission end-to-end | ✅ live |
-| Phase 2b — first real Kaggle submission | ✅ submission `57503219` accepted (run `20261022-001955-playground-series-s6e9`, candidate `cand-0006`, LightGBM, CV 0.94183); **LB score recording pending one resume** (description-matching fix landed after the run) |
+| Phase 2b — first real Kaggle submission | ✅ closed: submission `57503219` accepted, real LB score **0.94149** recorded via description matching; full-LB position: **~2545/3577 (top 71.15%), tie band 19 — target top-20% NOT met** (late submissions to a closed comp are scored but not listed; MONITOR estimates position by score) |
 | Phase 3 — iteration engine, resume, timeout handling | ✅ live (CV 0.94135 → 0.94185 in one pass) |
 | Phase 4 — monitoring (4.1 done: LB collection + percentile-vs-target; 4.2 open) | 🔶 |
 | Phase 5 — daemon/attach/chat, agentic orchestrator | ⬜ |
@@ -47,25 +47,22 @@ has been made and accepted.
 
 ## Next steps (recommended order)
 
-1. **Resume run `20261022-001955-playground-series-s6e9`** — with the
-   description-matching + pagination fixes, MONITOR will record cand-0006's real LB
-   score and our position; run reaches `finished`. Closes 2b's last checkmark.
-2. **Step 4.2 — deadline awareness + iterate re-entry** (the "deal with falling
+1. **Step 4.2 — deadline awareness + iterate re-entry** (the "deal with falling
    short" mechanism): when MONITOR reports percentile > target and budget/quota/
    deadline allow, let the planner write a *new* roadmap segment from the registry's
    experiment history (what's been tried, what worked) and re-enter ITERATE. Also:
    graceful SIGINT (Q0003.2) and possibly the `slayer competitions` command (Q0004).
-3. **Researcher model A/B (Q0001 note)** — the next session intends to run with a
+2. **Researcher model A/B (Q0001 note)** — the next session intends to run with a
    better model. Change **only `ml_researcher`** in `config/agents.yaml` first
    (strong reasoning model, e.g. `anthropic/claude-sonnet-4.5` or a frontier
    OpenAI/Gemini model); measure: CV trajectory, failed-candidate count, repair
    cycles, vs. the recorded baselines above. ~$1-3 per run vs. $10 budget.
    Watch: max_tokens may need raising for reasoning models; 429 backoff already
    handles rate limits.
-4. **First active-competition campaign** once an appealing Playground episode opens
+3. **First active-competition campaign** once an appealing Playground episode opens
    (or pick another active tabular comp): fresh `--live` run, approve-first;
    then Phase 4.2's re-entry makes it a multi-day campaign within quota.
-5. **Phase 5** when the above is boring: daemon + `attach`, `slayer chat`,
+4. **Phase 5** when the above is boring: daemon + `attach`, `slayer chat`,
    agentic orchestrator upgrade, docker sandboxing.
 
 ## Conventions for a new session

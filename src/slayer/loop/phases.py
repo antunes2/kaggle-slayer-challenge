@@ -607,6 +607,69 @@ def _parse_score(raw: str | None) -> float | None:
         return None
 
 
+def _report_estimated_position(ctx: RunContext, rows, total: int, username: str) -> None:
+    """Report a would-be leaderboard position from our best recorded LB score.
+
+    Used when our entry is not listed (e.g. late submissions to a closed
+    competition are scored but never join the public leaderboard).
+    """
+    target = ctx.run.target_percentile
+    scored = [
+        record.lb_score
+        for record in ctx.registry.list()
+        if record.lb_score is not None and not record.submission_id.startswith("mock-")
+    ]
+    if not scored or not rows:
+        ctx.say(
+            f"  leaderboard: username '{username}' not found among {total} entries "
+            "(no scored submission for this account on this competition?)"
+        )
+        ctx.journal.append(
+            agent="loop",
+            type=EventType.MONITOR_POSITION,
+            data={"entries_fetched": total, "our_entry": False},
+            run=ctx.run.run_id,
+        )
+        return
+
+    scores = [row.score for row in rows if row.score is not None]
+    if not scores:
+        ctx.say(f"  leaderboard: {total} entries but no scores to compare against")
+        return
+    higher_is_better = rows[0].score is None or (
+        scores[0] >= scores[-1] if len(scores) > 1 else True
+    )
+    best = max(scored) if higher_is_better else min(scored)
+    better = sum(1 for s in scores if s > best) if higher_is_better else sum(
+        1 for s in scores if s < best
+    )
+    ties = sum(1 for s in scores if s == best)
+    rank = better + 1
+    field = total + 1
+    percentile = round(rank / field * 100, 2)
+    met = percentile <= target
+    ctx.say(
+        f"  leaderboard: not listed (late submission) — best LB score {best:.5f} "
+        f"would rank ~{rank}/{field} (top {percentile}%), tie band of {ties} — "
+        f"target top {target}%: " + ("MET" if met else "NOT met")
+    )
+    ctx.journal.append(
+        agent="loop",
+        type=EventType.MONITOR_POSITION,
+        data={
+            "our_entry": False,
+            "estimated": True,
+            "best_lb_score": best,
+            "rank": rank,
+            "total": total,
+            "percentile": percentile,
+            "target_percentile": target,
+            "met": met,
+        },
+        run=ctx.run.run_id,
+    )
+
+
 def monitor_phase(ctx: RunContext) -> None:
     """MONITOR: collect real LB scores for submitted candidates; report position vs target."""
     if ctx.kaggle is None:
@@ -638,38 +701,14 @@ def monitor_phase(ctx: RunContext) -> None:
         ctx.say(f"  {record.id}: LB score {score:.5f} (submission {submission.ref})")
 
     username = ctx.kaggle.ping()
-    entries = ctx.kaggle.leaderboard(ctx.run.competition)
-    total = len(entries)
-    username_lower = str(username).strip().lower()
-    our = next(
-        (
-            entry
-            for entry in entries
-            if entry.team_name and str(entry.team_name).strip().lower() == username_lower
-        ),
-        None,
+    rows = ctx.kaggle.full_leaderboard(
+        ctx.run.competition, target_dir=ctx.run.workspace("reports")
     )
+    total = len(rows)
+    username_lower = str(username).strip().lower()
+    our = next((row for row in rows if username_lower in row.member_usernames), None)
     if our is None:
-        our = next(
-            (
-                entry
-                for entry in entries
-                if entry.team_name and username_lower in str(entry.team_name).strip().lower()
-            ),
-            None,
-        )
-    if our is None:
-        ctx.say(
-            f"  leaderboard: our entry not found in {total} fetched entries "
-            f"(kaggle display name may differ from '{username}', "
-            "or we are beyond the pages fetched)"
-        )
-        ctx.journal.append(
-            agent="loop",
-            type=EventType.MONITOR_POSITION,
-            data={"entries_fetched": total, "our_entry": False},
-            run=ctx.run.run_id,
-        )
+        _report_estimated_position(ctx, rows, total, username)
         return
     percentile = round(our.rank / total * 100, 2) if total else None
     target = ctx.run.target_percentile
