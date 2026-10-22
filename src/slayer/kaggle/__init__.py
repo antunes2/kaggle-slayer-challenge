@@ -4,6 +4,7 @@ from slayer.kaggle.client import (
     FullLeaderboardRow,
     KaggleClient,
     KaggleError,
+    NotebookInfo,
     SubmissionInfo,
     SubmissionRef,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "KaggleClient",
     "KaggleError",
     "FullLeaderboardRow",
+    "NotebookInfo",
     "QuotaManager",
     "SubmissionInfo",
     "SubmissionRef",

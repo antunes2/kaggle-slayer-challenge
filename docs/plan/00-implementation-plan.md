@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v2.2 (all 9 phases live-proven; first real submission scored; step 4.2 bounded re-entry rounds implemented, live validation pending) · **Updated:** 2026-10-22 · **Owner:** Gabriel
+> **Status:** v2.3 (all 9 phases live-proven; re-entry + blender live; 4.4 evidence-driven strategy — notebook scout + representation-first prompts — implemented) · **Updated:** 2026-10-22 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -324,7 +324,9 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | 4.1 | MONITOR phase: real LB-score collection for submitted candidates (registry `record_submission`), percentile-vs-target position reporting; `slayer leaderboard` command | ✅ ([design](designs/12-monitor.md)) |
 | 4.1b | Robustness fixes from the live resume: bounded step retries (max 3 attempts/step across resumes), CatBoost/XGBoost prompt contracts, cost estimation fallback (budget enforcement was inert), iteration terminal narration | ✅ |
 | 4.2 | Deadline awareness + bounded iterate re-entry on target shortfall (D0007): score-gap signal + CV-basis position proxy in MONITOR, deterministic re-entry gate, REPLAN (planner roadmap extension from full history), journal-based cumulative LLM budget, `--max-rounds` | ✅ ([design](designs/13-reentry-rounds.md); live validation in progress) |
-| 4.3 | OOF persistence in the harness + deterministic hill-climb blender (code-owned blend step at the end of ITERATE); researcher model A/B (`ml_researcher` → claude-sonnet-5.5) | ✅ ([design](designs/14-oof-blender.md); live validation pending) |
+| 4.3 | OOF persistence in the harness + deterministic hill-climb blender (code-owned blend step at the end of ITERATE); researcher model A/B (`ml_researcher` → claude-sonnet-5.5) | ✅ ([design](designs/14-oof-blender.md); live: correct, ~zero gain on near-identical candidates) |
+| 4.4 | Evidence-driven strategy ([C0004](changes/C0004-evidence-driven-strategy.md)): public-notebook scout → planner digest; generic representation-first prompts; paired-noise gate/reviewer wording; connection-blip retry budget; duplicate-blend fix | ✅ ([design](designs/15-notebook-scout.md); live test in progress) |
+| 4.5 | Paired-fold submission gate (code) + reviewer re-review fix (REVISE'd candidates re-picked forever) | ⬜ |
 
 ## 12. Testing Strategy
 

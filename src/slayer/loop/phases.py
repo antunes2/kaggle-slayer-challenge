@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import math
 import re
+import time
 
 from slayer.agents import DataAnalystAgent, MLResearcherAgent, PlannerAgent, ReviewerAgent
 from slayer.agents.planner import render_strategy_plan_md
 from slayer.analysis import AnalysisError, profile_data
+from slayer.analysis.notebooks import build_digest
 from slayer.analysis.render import render_data_report_md
 from slayer.cv import CandidateRunError, build_cv_protocol, run_candidate
 from slayer.kaggle import QuotaManager
@@ -96,6 +98,40 @@ def analysis_phase(ctx: RunContext) -> None:
     )
 
 
+DIGEST_MAX_AGE_S = 12 * 3600
+
+
+def notebook_digest(ctx: RunContext, max_age_s: float = DIGEST_MAX_AGE_S) -> str:
+    """The public-notebook digest for the planner: cached in reports/, refreshed when stale.
+
+    Fail-soft: without a scout-capable kaggle client, or when nothing is available,
+    the last digest (or an empty string) is used and the run continues.
+    """
+    path = ctx.run.workspace("reports") / "notebook_digest.md"
+    cached = path.read_text(encoding="utf-8") if path.exists() else ""
+    if cached and time.time() - path.stat().st_mtime < max_age_s:
+        return cached
+    if ctx.kaggle is None or not hasattr(ctx.kaggle, "list_notebooks"):
+        return cached
+    digest = build_digest(ctx.kaggle, ctx.run.competition)
+    if not digest.available and cached:
+        return cached
+    path.write_text(digest.markdown, encoding="utf-8")
+    ctx.journal.append(
+        agent="scout",
+        type=EventType.SCOUT_DIGEST,
+        data={"notebooks": digest.refs, "chars": len(digest.markdown), "errors": digest.errors},
+        run=ctx.run.run_id,
+    )
+    ctx.say(
+        f"  scout: digest of {len(digest.refs)} public notebooks "
+        f"(~{len(digest.markdown) // 4} tokens)"
+        if digest.available
+        else "  scout: no public notebook digest available"
+    )
+    return digest.markdown if digest.available else ""
+
+
 def planning_phase(ctx: RunContext) -> None:
     """PLANNING: produce the per-competition StrategyPlan from the analysis artifacts."""
     if ctx.llm is None or ctx.agent_configs is None:
@@ -107,6 +143,7 @@ def planning_phase(ctx: RunContext) -> None:
     competition_json = (reports_dir / "competition.json").read_text(encoding="utf-8")
     data_report_json = (reports_dir / "data_report.json").read_text(encoding="utf-8")
     feature_plan_json = (reports_dir / "feature_plan.json").read_text(encoding="utf-8")
+    digest = notebook_digest(ctx)
 
     planner = PlannerAgent(
         llm=ctx.llm,
@@ -118,6 +155,7 @@ def planning_phase(ctx: RunContext) -> None:
         competition_json=competition_json,
         data_report_json=data_report_json,
         feature_plan_json=feature_plan_json,
+        notebook_digest=digest,
     )
 
     evaluation_metric = json.loads(competition_json).get("evaluation_metric") or ""

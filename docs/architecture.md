@@ -34,10 +34,13 @@ Consequences you can rely on:
 src/slayer/
 ├── cli/main.py        # typer app: run, resume, init, status, journal, leaderboard
 ├── config.py          # slayer.yaml + agents.yaml + .env → pydantic settings
-├── llm/client.py      # OpenRouter client: retries (429-aware), JSON extraction,
+├── llm/client.py      # OpenRouter client: retries (429-aware; long backoff on
+│                      # connection blips), JSON extraction,
 │                      # token/cost accounting (estimates when provider omits cost)
-├── kaggle/            # KaggleClient (thin, defensive SDK wrapper), QuotaManager
-├── analysis/          # deterministic profiler → profile.{json,md} + markdown renders
+├── kaggle/            # KaggleClient (thin, defensive SDK wrapper; incl. public
+│                      # notebook listing/source), QuotaManager
+├── analysis/          # deterministic profiler → profile.{json,md} + markdown renders;
+│                      # notebooks (public-notebook scout → capped digest)
 ├── agents/            # Agent base (prompt + schema + journaling) + the five roles
 ├── loop/              # engine (phase machine + bounded re-entry rounds), phases (the
 │                      # 9 handlers), campaign (re-entry gate + REPLAN), blending
@@ -79,7 +82,8 @@ REPLAN → ITERATE → REVIEW → SUBMIT → MONITOR → … → finished
 ```
 User ──slayer run──► engine ──► phases ──► agents ──(LLM)──► schema-validated outputs
                      │                        │
-                     ├──► kaggle client ◄──────┤  (downloads, submits, leaderboards)
+                     ├──► kaggle client ◄──────┤  (downloads, submits, leaderboards,
+                     │                        │   public notebooks → scout digest)
                      └──► harness (subprocess) ─┘  (CV scores, submissions files)
 
 Everything lands in runs/<run_id>/:
@@ -91,7 +95,8 @@ Everything lands in runs/<run_id>/:
 │   ├── eda/            # profile.json / profile.md
 │   ├── models/<cand>/  # pipeline.py, cv_config.json, cv_results.json, submission.csv, run.log,
 │   │                   # oof.npy + fold_ids.npy (blendable metrics); blends: blend.json
-│   └── reports/        # competition.json, data_report.json, feature_plan.json, strategy_plan.json
+│   └── reports/        # competition.json, data_report.json, feature_plan.json, strategy_plan.json,
+│                       # notebook_digest.md, roadmap_round_N.json, leaderboard.csv
 ```
 
 ## The five agents
@@ -99,13 +104,14 @@ Everything lands in runs/<run_id>/:
 | Agent | role | reads | writes |
 |---|---|---|---|
 | data_analyst | interprets the deterministic profile | profile.md, competition.json | DataReport, FeaturePlan |
-| planner | strategy for this competition; re-entry roadmap extensions | analyst outputs, competition; history + gap (REPLAN) | StrategyPlan; RoadmapExtension |
+| planner | strategy for this competition; re-entry roadmap extensions | analyst outputs, competition, public-notebook digest; history + gap (REPLAN) | StrategyPlan; RoadmapExtension |
 | ml_researcher | writes pipeline.py plugins | strategy + feedback from registry/reviews | PipelineProposal (code) |
 | reviewer | adversarial gate before submissions | candidate code + CV + guidance | ReviewVerdict (approve/reject/revise) |
 | orchestrator | reserved (Phase 5) | — | — |
 
 Model routing is per-agent in `config/agents.yaml` (OpenRouter ids). The researcher
-is the highest-leverage model to upgrade (see `docs/plan/questions/Q0001`).
+is the highest-leverage model (A/B in `docs/plan/questions/Q0001`). How the agents
+*choose* ideas matters more than model tier — see `docs/plan/changes/C0004`.
 
 ## Safety model
 
@@ -116,6 +122,9 @@ is the highest-leverage model to upgrade (see `docs/plan/questions/Q0001`).
   catalog-estimated) — survives resumes — stops ITERATE and blocks re-entry.
 - **Harness sandbox**: per-candidate subprocess, process-group SIGKILL on timeout,
   SIGALRM self-deadline (best-effort), probe-fold early abort for pathological candidates.
+- **Untrusted external text**: the public-notebook digest is built by code, never
+  executed, and framed to the planner as evidence, not instructions; ideas that need
+  external data are tagged `[EXTERNAL]` and excluded (pipelines read competition files only).
 - **Secrets**: `.env` only (gitignored); never printed.
 
 ## Known limitations (honest)

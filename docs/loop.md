@@ -45,10 +45,14 @@ Downloads the competition zip **or reuses the per-competition cache**
    missingness-as-signal, and states what the profile *cannot* show.
 
 ### PLANNING — skip if `strategy_plan.json` exists
-Planner agent → `StrategyPlan`: confirmed problem type, CV shape (`k_folds`, seed,
-stratified), ordered **roadmap** (step 1 = simplest baseline; later steps: feature
-groups → alternative family → tuning → blending), `min_cv_improvement` submission
-gate, and `guidance[]` — hard constraints (imbalance handling, leakage rules, metric
+First the **notebook scout** (design 15, no LLM): the competition's most-voted public
+notebooks are read via the official API and reduced to a capped digest
+(`reports/notebook_digest.md`, ~4k tokens, `[EXTERNAL]` lines tagged, refreshed when
+older than 12 h, `scout.digest` journaled; fail-soft). Then the planner agent →
+`StrategyPlan`: confirmed problem type, CV shape (`k_folds`, seed, stratified), ordered
+**roadmap** (step 1 = simplest baseline; then hypotheses ordered by evidence —
+representation changes first, see C0004), `min_cv_improvement` submission gate (sized
+to *paired* fold noise), and `guidance[]` — hard constraints (imbalance handling, leakage rules, metric
 discipline) that flow verbatim into every researcher prompt. **The metric and its
 direction are resolved by code** (`cv.build_cv_protocol` via the metric registry) —
 the planner never decides physics. Unsupported metric → loud failure here.
@@ -87,7 +91,8 @@ aware): its pipeline code, CV results, and the strategy guidance. Verdicts:
 approve → `approved`; reject → `rejected`; revise → stays `scored`, full reasoning
 journaled (this is the fuel the next proposal's iteration context consumes).
 The reviewer hunts leakage, fit-on-test, metric mishandling, hardcoded
-dataset statistics, intent-vs-implementation gaps, and improvements within fold noise.
+dataset statistics, and intent-vs-implementation gaps. Small gains are flagged, not
+revised — the submission gate owns the minimum-improvement decision.
 
 ### SUBMIT — three gates, in order
 1. **CV gate**: `cv(candidate) - cv(best_submitted)` (direction-aware) ≥
@@ -128,8 +133,8 @@ harness budget (a passed deadline does not block). Otherwise: re-enter round N.
 ### REPLAN (round phases only)
 The planner (re-entry prompt `prompts/planner_extend.md`) reads the current strategy,
 the full experiment history (every candidate; failures with their first error line),
-the position + gap with the gap/spread ratio, and the round constraints (budget left,
-time budget, observed fold time, deadline). Output `RoadmapExtension`: an assessment,
+the position + gap with the gap/spread ratio, the round constraints (budget left,
+time budget, observed fold time, deadline), and the notebook digest (refreshed if stale). Output `RoadmapExtension`: an assessment,
 1-4 new steps + optional guidance — merged by code (unique titles, priorities after
 the current max, guidance dedupe) into `strategy_plan.json`; the raw extension lands in
 `reports/roadmap_round_N.json`; `roadmap.extended` is journaled. Or `stop` with a
@@ -164,4 +169,4 @@ with `cost_estimated` flag), `agent.output`, `candidate.added`,
 `candidate.status_changed` (carries `submission_id` for real submissions),
 `candidate.scored`, `candidate.lb_scored`, `submission.accepted` (real — quota),
 `submission.mocked`, `budget.warning`, `iterate.skipped`, `monitor.position`,
-`reentry.decision`, `roadmap.extended`, `blend.evaluated`.
+`reentry.decision`, `roadmap.extended`, `blend.evaluated`, `scout.digest`.

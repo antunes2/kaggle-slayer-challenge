@@ -67,9 +67,16 @@ class LLMClient:
         max_retries: int = 3,
         retry_wait_s: float = 0.5,
         rate_limit_wait_s: float = 15.0,
+        connection_wait_s: float = 15.0,
+        connection_retries: int = 5,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        """Configure the client with credentials, transport, and retry policy."""
+        """Configure the client with credentials, transport, and retry policy.
+
+        Connection failures (Wi-Fi/DNS blips) get their own, longer budget:
+        `connection_retries` retries with doubling waits from `connection_wait_s`
+        (capped at 5 minutes each) — unattended overnight runs must survive them.
+        """
         if not api_key:
             raise LLMError("OpenRouter API key is empty")
         self._api_key = api_key
@@ -78,6 +85,8 @@ class LLMClient:
         self._max_retries = max_retries
         self._retry_wait_s = retry_wait_s
         self._rate_limit_wait_s = rate_limit_wait_s
+        self._connection_wait_s = connection_wait_s
+        self._connection_retries = connection_retries
         self._transport = transport
         self._calls = 0
         self._tokens = 0
@@ -149,8 +158,10 @@ class LLMClient:
             "X-Title": "slayer",
         }
         last_error: LLMError | None = None
-        for attempt in range(self._max_retries + 1):
+        attempt = 0
+        while True:
             retry_after_s: float | None = None
+            connection_failed = False
             try:
                 with httpx.Client(timeout=self._timeout_s, transport=self._transport) as client:
                     r = client.post(
@@ -158,6 +169,7 @@ class LLMClient:
                     )
             except httpx.HTTPError as exc:
                 last_error = LLMError(f"connection error: {exc}")
+                connection_failed = True
             else:
                 if r.status_code == 200:
                     return r.json()
@@ -172,16 +184,20 @@ class LLMClient:
                         retry_after_s = None
                 if not _retryable(r.status_code):
                     raise last_error
-            if attempt < self._max_retries:
+            limit = self._connection_retries if connection_failed else self._max_retries
+            if attempt >= limit:
+                raise last_error
+            if connection_failed:
+                wait = min(self._connection_wait_s * (2**attempt), 300.0)
+            else:
                 wait = self._retry_wait_s * (2**attempt)
-                if last_error is not None and last_error.status_code == 429:
+                if last_error.status_code == 429:
                     wait = retry_after_s if retry_after_s is not None else max(
                         wait, self._rate_limit_wait_s * (attempt + 1)
                     )
-                if wait > 0:
-                    time.sleep(wait)
-        assert last_error is not None
-        raise last_error
+            if wait > 0:
+                time.sleep(wait)
+            attempt += 1
 
     def _fetch_model_prices(self) -> dict[str, tuple[float, float]]:
         """Fetch per-token (prompt, completion) prices from the catalog, cached."""

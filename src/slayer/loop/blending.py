@@ -96,6 +96,18 @@ def blend_phase(ctx: RunContext) -> None:
                            run=ctx.run.run_id)
         ctx.say(f"  blend: no gain over best single {result.best_single} — not registered")
         return
+    duplicate = next(
+        (r for r in ctx.registry.list()
+         if r.model_type == "Blend" and r.params.get("blend") == result.weights),
+        None,
+    )
+    if duplicate is not None:
+        event["candidate_id"] = duplicate.id
+        event["duplicate"] = True
+        ctx.journal.append(agent="blender", type=BLEND_EVALUATED, data=event,
+                           run=ctx.run.run_id)
+        ctx.say(f"  blend: same weights as existing {duplicate.id} — not registered again")
+        return
 
     first = submissions[pool[0].id]
     target = plan.target_column

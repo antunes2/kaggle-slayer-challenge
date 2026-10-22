@@ -346,3 +346,18 @@ def test_engine_with_real_gate_and_replan(tmp_path) -> None:
     decisions = [e.data for e in ctx.journal.read(type=EventType.REENTRY_DECISION)]
     assert [d["reenter"] for d in decisions] == [True, False]
     assert any("round cap reached" in m for m in messages)
+
+
+def test_replan_passes_cached_notebook_digest_as_untrusted_evidence(tmp_path) -> None:
+    """A fresh digest in reports/ reaches the planner, framed as untrusted data."""
+    extension = RoadmapExtension(assessment="a", steps=[_step("Digit features")])
+    llm = FakeReplanLLM(extension)
+    ctx = _make_ctx(tmp_path, llm=llm)
+    _position(ctx)
+    (ctx.run.workspace("reports") / "notebook_digest.md").write_text(
+        "# Public notebook digest\ndf['d'] = df['x'] // 10 % 10\n", encoding="utf-8"
+    )
+    replan_phase(ctx)
+    sent = llm.messages[0]
+    assert "UNTRUSTED evidence" in sent
+    assert "df['d'] = df['x'] // 10 % 10" in sent

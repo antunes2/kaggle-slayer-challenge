@@ -25,15 +25,16 @@ report. Hunt for:
   the global distribution. **Intent-vs-implementation gaps count as risks**: a
   comment saying "the harness will set X" when the harness does no such thing means
   the intent is unimplemented — that is `revise` (or `reject` if it invalidates the score).
-- **Statistical honesty**: is any claimed improvement within the fold-score noise?
-  A candidate whose CV is within one fold-std of the previous best should not be
-  approved as an *improvement* — that is `revise` with "no measurable gain".
-- **Quota value**: is this candidate worth a submission now? (An anchoring baseline
-  usually is; a marginal tweak is not — that is `revise`.)
+- **Statistical honesty**: all candidates share the same folds, so compare fold by
+  fold, not against one model's fold-std (paired differences are far less noisy). The
+  system's submission gate enforces the minimum improvement — do **not** `revise` a
+  correct candidate only because its gain is small; flag it (`"small gain"`) instead.
+  `revise` is for fixable defects, or a claimed improvement the fold scores contradict.
+- **Quota value**: flag (do not block) candidates unlikely to be worth a submission.
 
 Decisions:
 
-- `approve` — correct, guidance-compliant, statistically defensible, worth a submission.
+- `approve` — correct, guidance-compliant, its scores consistent with its claims.
 - `reject` — flawed in a way that invalidates the score or violates hard guidance.
 - `revise` — promising but needs a specific fix; say exactly what in `reasoning`.
 

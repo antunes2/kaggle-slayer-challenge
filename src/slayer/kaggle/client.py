@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import csv
 import io
+import json
 import os
 import tempfile
 import zipfile
@@ -57,6 +58,31 @@ class FullLeaderboardRow(BaseModel):
     team_name: str | None = None
     score: float | None = None
     member_usernames: list[str] = Field(default_factory=list)
+
+
+class NotebookInfo(BaseModel):
+    """A public notebook (kernel) attached to a competition."""
+
+    ref: str
+    title: str | None = None
+    votes: int | None = None
+
+
+def _code_from_source(source: str) -> str:
+    """Extract code cells from an .ipynb JSON source; plain scripts pass through."""
+    try:
+        notebook = json.loads(source)
+    except (json.JSONDecodeError, TypeError):
+        return source or ""
+    if not isinstance(notebook, dict) or "cells" not in notebook:
+        return source or ""
+    cells = []
+    for cell in notebook.get("cells") or []:
+        if cell.get("cell_type") != "code":
+            continue
+        body = cell.get("source") or ""
+        cells.append("".join(body) if isinstance(body, list) else str(body))
+    return "\n".join(cells)
 
 
 def _text(value: Any) -> str | None:
@@ -252,6 +278,46 @@ class KaggleClient:
                 )
             )
         return infos
+
+    def list_notebooks(self, competition: str, n: int = 5) -> list[NotebookInfo]:
+        """The competition's most-voted public notebooks (read-only)."""
+        try:
+            kernels = self._api.kernels_list(
+                competition=competition, sort_by="voteCount", page_size=n
+            ) or []
+        except Exception as exc:
+            raise KaggleError(f"notebook listing failed: {exc}") from exc
+        infos = []
+        for kernel in list(kernels)[:n]:
+            if kernel is None or not getattr(kernel, "ref", None):
+                continue
+            votes = getattr(kernel, "total_votes", None)
+            infos.append(
+                NotebookInfo(
+                    ref=str(kernel.ref),
+                    title=_text(getattr(kernel, "title", None)),
+                    votes=int(votes) if isinstance(votes, (int, float)) else None,
+                )
+            )
+        return infos
+
+    def notebook_code(self, ref: str) -> str:
+        """Fetch a public notebook's source in memory and return its code cells only."""
+        from kagglesdk.kernels.types.kernels_api_service import ApiGetKernelRequest
+
+        owner, _, slug = ref.partition("/")
+        if not owner or not slug:
+            raise KaggleError(f"invalid notebook ref: '{ref}'")
+        try:
+            with self._api.build_kaggle_client() as kaggle:
+                request = ApiGetKernelRequest()
+                request.user_name = owner
+                request.kernel_slug = slug
+                response = kaggle.kernels.kernels_api_client.get_kernel(request)
+        except Exception as exc:
+            raise KaggleError(f"notebook fetch failed for {ref}: {exc}") from exc
+        source = getattr(getattr(response, "blob", None), "source", "") or ""
+        return _code_from_source(source)
 
     def download_leaderboard(self, competition: str, target_dir: Path) -> Path:
         """Download the full public leaderboard zip into target_dir."""

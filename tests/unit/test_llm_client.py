@@ -249,3 +249,33 @@ def test_ping_sends_minimal_request():
     assert seen["payload"]["max_tokens"] == 16
     assert seen["payload"]["temperature"] == 0.0
     assert "ok" in seen["payload"]["messages"][0]["content"]
+
+
+def test_connection_blip_is_survived_with_its_own_retry_budget():
+    """DNS/Wi-Fi failures retry beyond max_retries (own budget) and then succeed."""
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) <= 3:
+            raise httpx.ConnectError("Temporary failure in name resolution")
+        return httpx.Response(200, json=_response_payload())
+
+    client = _client(handler, max_retries=1, connection_wait_s=0.0, connection_retries=5)
+    response = client.complete([{"role": "user", "content": "hi"}], "test/model")
+    assert response.content == "ok"
+    assert len(calls) == 4
+
+
+def test_persistent_connection_failure_raises_after_budget():
+    """A connection that never comes back fails loudly after connection_retries."""
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        raise httpx.ConnectError("Temporary failure in name resolution")
+
+    client = _client(handler, connection_wait_s=0.0, connection_retries=2)
+    with pytest.raises(LLMError, match="connection error"):
+        client.complete([{"role": "user", "content": "hi"}], "test/model")
+    assert len(calls) == 3

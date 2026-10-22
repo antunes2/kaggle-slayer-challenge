@@ -94,3 +94,18 @@ total; history rows for stuck `proposed` candidates read "never completed (statu
 Offline check against the real run `20261022-001955` (copied to a temp dir): MONITOR
 reports `target line 0.94640, gap +0.00491`; the gate re-enters round 1; the planner's
 position input shows `gap / spread ratio: 13.9x`. Live validation pending.
+
+### Live validation (2026-10-22, two runs)
+
+- **Mechanism: works end-to-end.** Dry-run fork of `20261022-001955` and the fresh run
+  `20261022-031417` (claude-sonnet-5.5 researcher): the gate re-entered on the real
+  and the CV-basis gap, REPLAN cited the gap/spread ratio (14×, 9×, 8×) and planned
+  structural-sounding steps; rounds 1-2 ran unattended; `rounds: 2 / 2` reported.
+- **Value: none yet.** All round steps scored 0.9415-0.9418 — the planner's levers were
+  as generic as the first roadmap's (target encoding of string columns, stacking, seed
+  bagging, class-weight ablation). Re-entry multiplies the quality of the ideas it is
+  given; it cannot create information. Addressed in [C0004](../changes/C0004-evidence-driven-strategy.md)
+  (notebook digest + evidence-ordered levers).
+- **Bug found:** a REVISE'd candidate stays `scored`, so REVIEW re-picks it every time
+  (cand-0008 reviewed 5×; three newer candidates never reviewed). Fix scheduled with
+  the paired-fold gate step.

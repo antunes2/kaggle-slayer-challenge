@@ -51,30 +51,52 @@ make must be implemented in the code, not in comments.
   subtract) on a category-dtype column — pandas raises a TypeError and the candidate
   fails. Do all math on the raw column FIRST, then convert at the end.
 - **Class imbalance**: for ranking metrics (AUC), class weighting rarely helps —
-  omit it unless the guidance demands an ablation. If weighting is used, it MUST be
-  `class_weight="balanced"` (computed from each fold at fit time). NEVER hardcode
-  `scale_pos_weight` or any class ratio read from a report — a hardcoded ratio is a
-  review-blocking defect.
+  omit it unless the guidance demands it or an ablation step asks for it. If weighting
+  is used, it MUST be computed at fit time (`class_weight="balanced"`,
+  `auto_class_weights="Balanced"`). NEVER hardcode `scale_pos_weight` or any class
+  ratio read from a report — a hardcoded ratio is a review-blocking defect.
 - **When repairing a failed attempt**: read the error in the feedback, fix the ROOT
   cause (e.g. dtype-ordering), and change the approach — do not resubmit the same
   pattern.
-- **Features**: ratios, differences, counts, and simple domain interactions (e.g.
-  per-capita income, distances, access scores) beat elaborate constructions. Tree
-  models learn interactions themselves — prefer adding information the raw columns
-  don't directly express.
-- **Skewed money/count columns**: log1p transforms are usually safe wins.
+- **Representation beats decoration.** Gradient-boosted trees already learn
+  interactions and are invariant to monotone transforms, so ratios, products, and
+  log1p of existing columns rarely move the score. What changes the score is giving the
+  model information the raw values hide. Treat these as hypotheses the step or the
+  evidence (data profile, public-notebook findings in the step description) points to:
+  - **values as categories**: a numeric column with a moderate number of distinct
+    values can carry signal in *exact* values — add a string/category copy of it and
+    target-encode it (keep the numeric too);
+  - **digit / rounding structure**: for synthetic or generated data, individual
+    digits (`(x // 10**k) % 10`), rounded versions (`np.floor(x / 100)`), and
+    "is exactly this common value" flags can expose generator artifacts — stateless,
+    so they belong in `make_features`;
+  - **category combinations**: concatenate a few categorical columns into one key
+    string and encode it;
+  - **frequency and target encoding**: learned from data, so they MUST live inside
+    the estimator returned by `build_model()` — e.g. a `Pipeline` with a
+    `ColumnTransformer` using scikit-learn's `TargetEncoder` (it cross-fits
+    internally, leakage-safe), or a small custom transformer whose `fit` counts value
+    frequencies. Never compute them in `make_features`.
+- **Use the time budget — capacity is cheap score.** If the data and the history show
+  folds finishing in a small fraction of the per-fold budget, spend the headroom:
+  lower the learning rate (0.01–0.02) and raise `n_estimators` proportionally, raise
+  `max_bin` for many-valued numerics. Early stopping needs a validation set the
+  harness does not pass to `fit` — only use it from inside the estimator (e.g.
+  `HistGradientBoostingClassifier(early_stopping=True)`), otherwise fix the tree count.
 - **Determinism**: always set `random_state`; identical inputs must give identical
   outputs across folds.
-- For a baseline step keep it fast: raw features, one strong model, the imbalance
-  handling the guidance requires, and nothing else.
-- Mind the stated time budget: calibrate `n_estimators` and preprocessing cost to it.
+- For a baseline step keep it fast: raw features, one strong model, and nothing else.
 
 ## Process
 
 - You receive: the dataset profile (EXACT column names and dtypes), the analyst's
   report, the feature plan, the strategy guidance, one roadmap step, and (in later
-  iterations) feedback from previous candidates — reviews and crash logs. Obey the
-  feedback; do not repeat a rejected pattern.
-- Feature ideas used must be referenced by their exact names from the feature plan.
+  iterations) feedback from previous candidates — reviews, crash logs, scores. Obey the
+  feedback; do not repeat a rejected pattern, and do not re-propose a variation the
+  history already shows scoring within noise of the best.
+- Implement the step's hypothesis faithfully — the step description is the
+  experiment; a pipeline that quietly does something else wastes a run.
+- Feature ideas used must be referenced by their exact names from the feature plan
+  (or `step:<short name>` for ideas that come from the roadmap step itself).
 - Output valid JSON matching the schema; `pipeline_code` is one JSON string
   containing the full Python file.

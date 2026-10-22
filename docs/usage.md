@@ -48,7 +48,8 @@ uv run slayer init                  # environment check
 [phase] init            competition resolved; rules probe (fail-fast if not accepted)
 [phase] data_collection  download or cache reuse (~seconds when cached)
 [phase] analysis        profiler (deterministic) + data analyst agent
-[phase] planning        strategy: CV protocol, roadmap, submission gate, guidance
+[phase] planning        scout digests top public notebooks; then strategy: CV protocol,
+                        roadmap, submission gate, guidance
 [phase] baseline        researcher writes pipeline.py #1; harness scores it
 [phase] iterate         one candidate per roadmap step; repair-retry; review+submit
 [phase] review          reviewer agent gates the best unreviewed candidate
@@ -111,7 +112,8 @@ reviewer: {temperature: 0.0}          # adversarial, deterministic
 Prompts live in `prompts/*.md` — editing them changes agent behavior immediately;
 they are version-controlled like code (and most behavioral lessons live in them).
 `prompts/planner_extend.md` is the planner's re-entry prompt (same model routing as
-`planner`).
+`planner`). Keep prompt rules **generic for tabular data** — competition specifics
+should arrive through the data profile and the notebook digest (C0004).
 
 ## Reading a run
 
@@ -130,6 +132,11 @@ they are version-controlled like code (and most behavioral lessons live in them)
 - **403 on download/INIT** — accept the competition rules (URL in the error).
 - **HTTP 429 from OpenRouter** — provider rate limit; the client backs off 15/30/45s
   automatically; if a run dies anyway, just `slayer resume` it.
+- **`connection error: ... name resolution`** — the internet dropped; the client now
+  waits 15 → 30 → 60 → 120 → 240 s before giving up (~7.5 min). Longer outages still
+  fail the run — `slayer resume` it.
+- **`scout: no public notebook digest available`** — harmless; planning proceeds from
+  the data alone (new competitions often have few notebooks).
 - **`exhausted 3 attempts`** — a roadmap step failed initial + repair + retry; inspect
   `workspace/models/*/run.log`, fix the prompt or config, resume.
 - **Stuck `active` after Ctrl+C** — cosmetic; `slayer resume <id>` picks up cleanly.

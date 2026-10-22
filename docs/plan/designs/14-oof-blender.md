@@ -70,3 +70,15 @@ Deterministic: ties go to the lowest candidate id.
   results are deterministic.
 - Blend step: registers an approved Blend with averaged submission + journal event;
   skips < 2 members, unsupported metrics, mismatched folds, and pools already evaluated.
+
+## Retro (2026-10-22, live run `20261022-031417`)
+
+- **Correctness: verified.** OOF fold scores reproduce the harness CV; blends were
+  registered and gated live (cand-0007: 0.94200 vs best single 0.94196).
+- **Optimism: measured, negligible.** Nested check — weights chosen on 4 folds, scored
+  on the held-out 5th: mean gain **+0.00003** (in-sample: +0.00004).
+- **Value: ~zero on this run.** LightGBM vs CatBoost OOF correlation **0.9984** — the
+  candidates were near-copies, so there was nothing to blend. The blender becomes
+  useful only when candidates use different representations (C0004).
+- **Duplicate fix:** a grown pool that yields identical weights no longer registers a
+  second, identical Blend (cand-0013 duplicated cand-0007 live).

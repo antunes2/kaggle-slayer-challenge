@@ -160,3 +160,26 @@ def test_blend_skips_mismatched_folds(tmp_path) -> None:
     ctx.reporter = messages.append
     blend_phase(ctx)
     assert any("different folds" in m for m in messages)
+
+
+def test_blend_does_not_register_identical_weights_twice(tmp_path) -> None:
+    """A grown pool that yields the same weights reuses the existing Blend."""
+    ctx = _blend_ctx(tmp_path)
+    blend_phase(ctx)
+    junk = ctx.registry.add(ModelCandidate(model_type="lightgbm"))
+    ctx.registry.record_cv(junk.id, 0.5, 0.01)
+    ctx.registry.set_status(junk.id, "approved")
+    folder = ctx.run.workspace("models") / junk.id
+    folder.mkdir(parents=True)
+    np.save(folder / "oof.npy", np.random.default_rng(9).normal(0, 1, N))
+    np.save(folder / "fold_ids.npy", (np.arange(N) % 4).astype(np.int8))
+    pd.DataFrame({"id": [1000, 1001], "Target": [0.5, 0.5]}).to_csv(
+        folder / "submission.csv", index=False
+    )
+    messages: list[str] = []
+    ctx.reporter = messages.append
+
+    blend_phase(ctx)
+
+    assert len([r for r in ctx.registry.list() if r.model_type == "Blend"]) == 1
+    assert any("same weights as existing" in m for m in messages)

@@ -24,3 +24,4 @@ errors, finish with a short **Retro** section — the doc stays true, not aspira
 - [12 — MONITOR: LB-Score Collection & Position Awareness](12-monitor.md)
 - [13 — RE-ENTRY: Bounded Rounds on Target Shortfall](13-reentry-rounds.md)
 - [14 — BLEND: OOF Persistence + Deterministic Blender](14-oof-blender.md)
+- [15 — SCOUT: Public-Notebook Digest for the Planner](15-notebook-scout.md)

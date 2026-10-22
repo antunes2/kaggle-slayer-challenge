@@ -11,7 +11,7 @@ from slayer.agents.planner import render_strategy_plan_md
 from slayer.analysis import AnalysisError
 from slayer.cv import build_cv_protocol
 from slayer.loop.engine import CampaignStop, ReentryDecision, RunContext
-from slayer.loop.phases import _load_plan, run_spend
+from slayer.loop.phases import _load_plan, notebook_digest, run_spend
 from slayer.schemas import RoadmapExtension, RoadmapStep, StrategyPlan
 from slayer.workspace import EventType, Journal
 
@@ -286,6 +286,7 @@ def replan_phase(ctx: RunContext) -> None:
         position_md=render_position_md(position, stats),
         constraints_md=_constraints_md(ctx, round_number, stats),
         round_number=round_number,
+        notebook_digest=notebook_digest(ctx),
     )
     reports_dir = ctx.run.workspace("reports")
     (reports_dir / f"roadmap_round_{round_number}.json").write_text(
