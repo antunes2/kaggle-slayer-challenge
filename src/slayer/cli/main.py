@@ -348,7 +348,9 @@ def status(
     typer.echo(f"  status:      {run.status}")
     typer.echo(f"  workspace:   {run.root}")
     if phases:
-        typer.echo(f"  phases:      {' -> '.join(str(p) for p in phases if p)}")
+        shown = [str(p) for p in phases if p]
+        prefix = f"… ({len(shown)} entries) " if len(shown) > 10 else ""
+        typer.echo(f"  phases:      {prefix}{' -> '.join(shown[-10:])}")
     paused = journal.read(type=EventType.LOOP_PAUSED)
     if paused and run.status == RunStatus.PAUSED:
         typer.echo(f"  paused:      {paused[-1].data.get('reason')}")
@@ -427,6 +429,59 @@ def leaderboard(
         )
     else:
         typer.echo(f"username '{username}' not found among {total} entries")
+
+
+@app.command()
+def competitions(
+    search: str = typer.Option(None, "--search", "-s", help="Free-text search"),
+    category: str = typer.Option(
+        "playground",
+        "--category",
+        "-c",
+        help="playground | featured | research | gettingStarted | all",
+    ),
+    sort_by: str = typer.Option(
+        "latestDeadline",
+        "--sort-by",
+        help="latestDeadline | earliestDeadline | recentlyCreated | numberOfTeams | prize",
+    ),
+    limit: int = typer.Option(20, "--limit", "-n", help="Max competitions to show"),
+    env_file: Path = typer.Option(Path(".env"), "--env-file"),
+) -> None:
+    """Browse active Kaggle competitions; copy a ref into `slayer run <ref>`."""
+    secrets = load_secrets(env_file)
+    if not secrets.kaggle_api_token:
+        typer.secho("KAGGLE_API_TOKEN missing — cannot list competitions.", fg="red")
+        raise typer.Exit(1)
+    try:
+        kaggle = KaggleClient.from_token(secrets.kaggle_api_token)
+        found = kaggle.list_competitions(
+            search=search,
+            category=None if category == "all" else category,
+            sort_by=sort_by,
+            page_size=limit,
+        )
+    except KaggleError as exc:
+        typer.secho(f"competition listing failed: {exc}", fg="red")
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        typer.secho(f"competition listing failed (check --category/--sort-by): {exc}", fg="red")
+        raise typer.Exit(1) from exc
+    if not found:
+        typer.echo("No competitions match — try --category all or a different --search.")
+        return
+    shown = found[:limit]
+    typer.secho(f"{len(shown)} competitions (category={category}, sort={sort_by})", bold=True)
+    for comp in shown:
+        deadline = (comp.deadline or "-")[:10]
+        quota = comp.max_daily_submissions if comp.max_daily_submissions is not None else "-"
+        entered = "  [entered]" if comp.user_has_entered else ""
+        typer.echo(f"  {comp.ref:<40} deadline {deadline}  metric: {comp.evaluation_metric or '-'}"
+                   f"  quota {quota}/day{entered}")
+        if comp.title:
+            typer.echo(f"      {comp.title}")
+    typer.echo("")
+    typer.echo("Start one with: uv run slayer run <ref>   (accept its rules on kaggle.com first)")
 
 
 @app.command()

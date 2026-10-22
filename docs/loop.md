@@ -72,8 +72,10 @@ across all resumes**, counted from the registry):
 3. On failure: **one repair attempt** with the error fed back; second failure
    exhausts the step.
 4. After each scored candidate: `review_phase` + `submit_phase` run.
-5. After the loop: one bounded repair for an unactioned REVISE verdict, if any
-   (skipped when the budget stopped the loop).
+5. After the loop: one bounded repair for the **best-scoring** candidate with an
+   unactioned REVISE verdict (unactioned = no candidate has `revision_of` = it); the
+   fix is registered with `parent_id`/`revision_of` lineage (skipped when the budget
+   stopped the loop).
 6. **Blend step** (design 14, no LLM — runs even after a budget stop): the
    reviewer-approved candidates with OOF predictions are hill-climbed (Caruana greedy
    selection with replacement, mean per-fold metric on the shared folds). A blend of ≥ 2
@@ -86,8 +88,9 @@ Budget: before every proposal, cumulative LLM cost ≥ `run.budget_usd` →
 (max with the live client), so spend from earlier resumes counts.
 
 ### REVIEW
-Reviewer agent judges the best scored-but-unreviewed candidate (metric-direction
-aware): its pipeline code, CV results, and the strategy guidance. Verdicts:
+Reviewer agent judges the best scored candidate **without a verdict yet**
+(metric-direction aware; a REVISE'd candidate is never re-reviewed — it is fixed by the
+revision step instead): its pipeline code, CV results, and the strategy guidance. Verdicts:
 approve → `approved`; reject → `rejected`; revise → stays `scored`, full reasoning
 journaled (this is the fuel the next proposal's iteration context consumes).
 The reviewer hunts leakage, fit-on-test, metric mishandling, hardcoded
@@ -95,8 +98,11 @@ dataset statistics, and intent-vs-implementation gaps. Small gains are flagged, 
 revised — the submission gate owns the minimum-improvement decision.
 
 ### SUBMIT — three gates, in order
-1. **CV gate**: `cv(candidate) - cv(best_submitted)` (direction-aware) ≥
-   `min_cv_improvement`; first submission always allowed.
+1. **CV gate**: passes when `cv(candidate) - cv(best_submitted)` (direction-aware) ≥
+   `min_cv_improvement`, **or** when the paired per-fold gain is consistent (positive
+   on all folds but at most one, mean > 2× the std of the fold differences) — all
+   candidates share folds, so paired noise is far below fold std. First submission
+   always allowed.
 2. **Quota gate**: real submissions only — `QuotaManager` counts journal
    `submission.accepted` events per UTC day vs the configured cap; mock submissions
    never consume quota.

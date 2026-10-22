@@ -194,3 +194,88 @@ def test_submit_kaggle_sink_consumes_quota(tmp_path) -> None:
     assert ctx.registry.list()[0].status == "submitted"
     quota = QuotaManager(ctx.journal, ctx.run.submissions_per_day)
     assert quota.used_today() == 1
+
+
+REVISE = ReviewVerdict(decision="revise", reasoning="type digits as categorical", risk_flags=[])
+
+
+def _write_folds(ctx, candidate_id: str, scores: list[float]) -> None:
+    """Write a cv_results.json with the given fold scores."""
+    folder = ctx.run.workspace("models") / candidate_id
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "cv_results.json").write_text(json.dumps(
+        {"status": "ok", "folds": [{"fold": i, "score": s} for i, s in enumerate(scores)]}
+    ), encoding="utf-8")
+
+
+def _submitted_base_and_challenger(tmp_path, challenger_folds):
+    """A submitted base candidate and an approved challenger with given fold scores."""
+    ctx = _make_ctx(tmp_path, APPROVE)
+    review_phase(ctx)
+    submit_phase(ctx)
+    base = ctx.registry.list()[0]
+    base_folds = [0.940, 0.941, 0.942, 0.943, 0.944]
+    _write_folds(ctx, base.id, base_folds)
+    challenger = ctx.registry.add(ModelCandidate(model_type="catboost"))
+    mean = sum(challenger_folds) / len(challenger_folds)
+    ctx.registry.record_cv(challenger.id, base.cv_score + (mean - sum(base_folds) / 5))
+    ctx.registry.set_status(challenger.id, "approved")
+    _write_folds(ctx, challenger.id, challenger_folds)
+    return ctx, challenger
+
+
+def test_submit_paired_gate_accepts_consistent_small_gain(tmp_path) -> None:
+    """+0.0002 on every fold (below the 0.001 gate) is a real, paired improvement."""
+    ctx, challenger = _submitted_base_and_challenger(
+        tmp_path, [0.9402, 0.94121, 0.94219, 0.9432, 0.94418]
+    )
+    messages: list[str] = []
+    ctx.reporter = messages.append
+    submit_phase(ctx)
+    assert ctx.registry.get(challenger.id).status == "submitted"
+    assert any("paired gain" in m and "5/5 folds" in m for m in messages)
+
+
+def test_submit_paired_gate_rejects_inconsistent_gain(tmp_path) -> None:
+    """A small mean gain that flips sign across folds stays blocked."""
+    ctx, challenger = _submitted_base_and_challenger(
+        tmp_path, [0.9410, 0.9400, 0.9430, 0.9420, 0.9450]
+    )
+    submit_phase(ctx)
+    assert ctx.registry.get(challenger.id).status == "approved"
+
+
+def test_review_skips_candidates_that_already_have_a_verdict(tmp_path) -> None:
+    """A REVISE'd candidate is not re-reviewed; the next unreviewed one is."""
+    ctx = _make_ctx(tmp_path, REVISE)
+    review_phase(ctx)
+    first = ctx.registry.list()[0]
+    second = ctx.registry.add(ModelCandidate(model_type="catboost"))
+    ctx.registry.record_cv(second.id, first.cv_score - 0.001)
+    (ctx.run.workspace("models") / second.id).mkdir(parents=True, exist_ok=True)
+    review_phase(ctx)
+    verdicts = ctx.journal.read(type=EventType.AGENT_OUTPUT, agent="reviewer")
+    assert [v.data["candidate_id"] for v in verdicts] == [first.id, second.id]
+    messages: list[str] = []
+    ctx.reporter = messages.append
+    review_phase(ctx)
+    assert any("nothing to review" in m for m in messages)
+
+
+def test_pending_revision_targets_best_unrevised_candidate(tmp_path) -> None:
+    """The best REVISE'd candidate is pending even if a later verdict approved another."""
+    from slayer.loop.phases import _pending_revision
+
+    ctx = _make_ctx(tmp_path, REVISE)
+    review_phase(ctx)
+    best = ctx.registry.list()[0]
+    other = ctx.registry.add(ModelCandidate(model_type="catboost"))
+    ctx.registry.record_cv(other.id, best.cv_score - 0.001)
+    ctx.journal.append(agent="reviewer", type=EventType.AGENT_OUTPUT,
+                       data={"candidate_id": other.id, "decision": "approve"})
+    record, verdict = _pending_revision(ctx)
+    assert record.id == best.id and verdict["decision"] == "revise"
+
+    fix = ctx.registry.add(ModelCandidate(model_type="lightgbm",
+                                          params={"revision_of": best.id}))
+    assert fix and _pending_revision(ctx) is None

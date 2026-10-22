@@ -34,3 +34,4 @@ What this implies — including downsides we consciously accept.
 - [D0005 — Storage: JSONL journal for events + SQLite registry for entity state](D0005-storage-journal-and-sqlite-registry.md)
 - [D0006 — Model routing: fast Gemini Flash tier as default](D0006-model-routing-gemini-flash.md)
 - [D0007 — Shortfall handling: automatic, bounded re-entry rounds](D0007-bounded-reentry-rounds.md)
+- [D0008 — Competition discovery: a browse command](D0008-competition-browse-command.md)

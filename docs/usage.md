@@ -34,6 +34,9 @@ uv run slayer run playground-series-s6e9
 uv run slayer resume <run_id>
 #   --max-rounds N              raise/lower the run's round cap (persisted)
 
+# Discover competitions (Q0004) — default: playground, latest deadline first
+uv run slayer competitions          # --search TEXT  --category playground|featured|all  --sort-by ...  -n 20
+
 # Observability
 uv run slayer status                 # list runs (or one run's detail + LLM spend)
 uv run slayer journal <run_id>       # event timeline; --limit N

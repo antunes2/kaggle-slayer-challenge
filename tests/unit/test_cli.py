@@ -292,3 +292,34 @@ def test_run_command_requires_kaggle_token(tmp_path, monkeypatch) -> None:
     )
     assert result.exit_code == 1
     assert "KAGGLE_API_TOKEN or OPENROUTER_API_KEY missing" in result.output
+
+
+class _FakeListKaggle:
+    """Fake kaggle client for `slayer competitions`."""
+
+    calls: list[dict] = []
+
+    @classmethod
+    def from_token(cls, token: str) -> "_FakeListKaggle":
+        return cls()
+
+    def list_competitions(self, **kwargs):
+        from slayer.kaggle import CompetitionInfo
+
+        _FakeListKaggle.calls.append(kwargs)
+        return [CompetitionInfo(ref="playground-series-s6e10", title="Predict Things",
+                                deadline="2026-11-30 23:59:00", evaluation_metric="Roc Auc Score",
+                                max_daily_submissions=5, user_has_entered=True)]
+
+
+def test_competitions_lists_refs(tmp_path, monkeypatch) -> None:
+    """The browse command prints refs, deadlines, metrics, and a run hint."""
+    monkeypatch.setattr(cli_main, "KaggleClient", _FakeListKaggle)
+    env = tmp_path / ".env"
+    env.write_text("KAGGLE_API_TOKEN=tok123456789012345\n", encoding="utf-8")
+    result = runner.invoke(app, ["competitions", "--env-file", str(env), "-c", "all"])
+    assert result.exit_code == 0
+    assert "playground-series-s6e10" in result.output
+    assert "deadline 2026-11-30" in result.output and "[entered]" in result.output
+    assert "slayer run <ref>" in result.output
+    assert _FakeListKaggle.calls[-1]["category"] is None

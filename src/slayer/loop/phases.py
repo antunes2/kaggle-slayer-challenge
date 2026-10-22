@@ -197,14 +197,18 @@ def _strip_code_fences(code: str) -> str:
 
 
 def _evaluate_proposal(
-    ctx: RunContext, plan: StrategyPlan, proposal, protocol, step
+    ctx: RunContext, plan: StrategyPlan, proposal, protocol, step, revision_of: str | None = None
 ) -> tuple[CandidateRecord, CVResult]:
     """Register, write, and evaluate one proposal through the harness."""
+    params = {"roadmap_step": step.title, "priority": step.priority}
+    if revision_of:
+        params["revision_of"] = revision_of
     record = ctx.registry.add(
         ModelCandidate(
             model_type=proposal.model_family,
             notes=(proposal.description or step.title)[:200],
-            params={"roadmap_step": step.title, "priority": step.priority},
+            params=params,
+            parent_id=revision_of,
         )
     )
     candidate_dir = ctx.run.workspace("models") / record.id
@@ -381,29 +385,47 @@ def _failure_head(result) -> str:
     return lines[0][:90]
 
 
-def _pending_revision(ctx: RunContext):
-    """Return (record, verdict) for a scored candidate with an unactioned REVISE verdict."""
-    verdicts = ctx.journal.read(type=EventType.AGENT_OUTPUT, agent="reviewer")
-    if not verdicts:
+def _reviewed_ids(ctx: RunContext) -> set[str]:
+    """Candidate ids that already received a reviewer verdict (any decision)."""
+    return {
+        str(event.data.get("candidate_id"))
+        for event in ctx.journal.read(type=EventType.AGENT_OUTPUT, agent="reviewer")
+        if event.data.get("candidate_id")
+    }
+
+
+def _pending_revision(ctx: RunContext, higher_is_better: bool = True):
+    """Return (record, verdict) for the best scored candidate with an unactioned REVISE.
+
+    Unactioned = no candidate records it as `revision_of` yet. Best-first, so the
+    strongest REVISE'd candidate is fixed before weaker ones (one per ITERATE pass).
+    """
+    revised = {
+        r.params.get("revision_of") for r in ctx.registry.list() if r.params.get("revision_of")
+    }
+    latest: dict[str, dict] = {}
+    for event in ctx.journal.read(type=EventType.AGENT_OUTPUT, agent="reviewer"):
+        if event.data.get("candidate_id"):
+            latest[str(event.data["candidate_id"])] = event.data
+    pending = []
+    for candidate_id, verdict in latest.items():
+        if verdict.get("decision") != "revise" or candidate_id in revised:
+            continue
+        try:
+            record = ctx.registry.get(candidate_id)
+        except KeyError:
+            continue
+        if record.status == "scored" and record.cv_score is not None:
+            pending.append((record, verdict))
+    if not pending:
         return None
-    latest = verdicts[-1].data
-    if latest.get("decision") != "revise":
-        return None
-    candidate_id = latest.get("candidate_id")
-    if not candidate_id:
-        return None
-    try:
-        record = ctx.registry.get(candidate_id)
-    except KeyError:
-        return None
-    if record.status != "scored":
-        return None
-    return record, latest
+    pending.sort(key=lambda item: item[0].cv_score, reverse=higher_is_better)
+    return pending[0]
 
 
 def _run_revision(ctx: RunContext, plan: StrategyPlan, protocol, propose) -> None:
     """Act once on the latest REVISE feedback: propose, evaluate, re-review, re-gate."""
-    revision = _pending_revision(ctx)
+    revision = _pending_revision(ctx, protocol.higher_is_better)
     if revision is None:
         return
     record, verdict = revision
@@ -425,7 +447,9 @@ def _run_revision(ctx: RunContext, plan: StrategyPlan, protocol, propose) -> Non
         "Produce a corrected version implementing the same roadmap step."
     )
     proposal = propose(step, extra=extra)
-    new_record, result = _evaluate_proposal(ctx, plan, proposal, protocol, step)
+    new_record, result = _evaluate_proposal(
+        ctx, plan, proposal, protocol, step, revision_of=record.id
+    )
     if result.status != "ok":
         ctx.say(f"  revision {new_record.id} failed ({result.status})")
         return
@@ -534,10 +558,13 @@ def review_phase(ctx: RunContext) -> None:
     plan, competition = _load_plan(ctx)
     protocol = build_cv_protocol(competition.get("evaluation_metric") or "", plan.cv)
 
+    reviewed = _reviewed_ids(ctx)
     scored = [
         r
         for r in ctx.registry.list()
-        if r.cv_score is not None and r.status not in ("approved", "rejected", "submitted")
+        if r.cv_score is not None
+        and r.status not in ("approved", "rejected", "submitted")
+        and r.id not in reviewed
     ]
     if not scored:
         ctx.say("  nothing to review — no unreviewed scored candidates")
@@ -589,6 +616,49 @@ def review_phase(ctx: RunContext) -> None:
     )
 
 
+def _fold_scores(ctx: RunContext, candidate_id: str) -> list[float]:
+    """Per-fold CV scores from a candidate's cv_results.json (empty if unavailable)."""
+    path = ctx.run.workspace("models") / candidate_id / "cv_results.json"
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    return [float(f["score"]) for f in data.get("folds") or [] if "score" in f]
+
+
+def _improvement_gate(
+    ctx: RunContext, record, best, higher_is_better: bool, min_gain: float
+) -> tuple[bool, str]:
+    """CV gate: mean gain >= min_gain, or a consistent paired-fold gain.
+
+    All candidates share the same folds, so the per-fold difference is far less
+    noisy than one model's fold std. A gain counts as real when it is positive on all
+    folds but at most one AND its mean exceeds 2x the std of the fold differences.
+    """
+    sign = 1 if higher_is_better else -1
+    delta = (record.cv_score - best.cv_score) * sign
+    if delta >= min_gain:
+        return True, f"CV improvement {delta:.6f} >= gate {min_gain}"
+    ours, theirs = _fold_scores(ctx, record.id), _fold_scores(ctx, best.id)
+    if len(ours) == len(theirs) >= 3:
+        diffs = [(a - b) * sign for a, b in zip(ours, theirs, strict=True)]
+        mean = sum(diffs) / len(diffs)
+        std = (sum((d - mean) ** 2 for d in diffs) / len(diffs)) ** 0.5
+        wins = sum(1 for d in diffs if d > 0)
+        if mean > 0 and wins >= len(diffs) - 1 and mean > 2 * std:
+            return True, (
+                f"paired gain {mean:.6f} on {wins}/{len(diffs)} folds "
+                f"(fold-diff std {std:.6f}) vs {best.id}"
+            )
+        return False, (
+            f"CV improvement {delta:.6f} < gate {min_gain}; paired gain {mean:.6f} on "
+            f"{wins}/{len(diffs)} folds (fold-diff std {std:.6f}) not consistent"
+        )
+    return False, f"CV improvement {delta:.6f} < gate {min_gain}"
+
+
 def submit_phase(ctx: RunContext) -> None:
     """SUBMIT: gate (CV improvement + quota + approval) then submit via the sink."""
     if ctx.sink is None:
@@ -611,15 +681,13 @@ def submit_phase(ctx: RunContext) -> None:
         1, higher_is_better=protocol.higher_is_better, submitted_only=True
     )
     if best_submitted:
-        delta = (record.cv_score - best_submitted[0].cv_score) * (
-            1 if protocol.higher_is_better else -1
+        passed, reason = _improvement_gate(
+            ctx, record, best_submitted[0], protocol.higher_is_better, plan.min_cv_improvement
         )
-        if delta < plan.min_cv_improvement:
-            ctx.say(
-                f"  skipping {record.id}: CV improvement {delta:.6f} < "
-                f"gate {plan.min_cv_improvement}"
-            )
+        if not passed:
+            ctx.say(f"  skipping {record.id}: {reason}")
             return
+        ctx.say(f"  {record.id} passes the CV gate: {reason}")
 
     if not ctx.run.dry_run:
         quota = QuotaManager(ctx.journal, ctx.run.submissions_per_day)

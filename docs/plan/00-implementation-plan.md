@@ -326,7 +326,7 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | 4.2 | Deadline awareness + bounded iterate re-entry on target shortfall (D0007): score-gap signal + CV-basis position proxy in MONITOR, deterministic re-entry gate, REPLAN (planner roadmap extension from full history), journal-based cumulative LLM budget, `--max-rounds` | ✅ ([design](designs/13-reentry-rounds.md); live validation in progress) |
 | 4.3 | OOF persistence in the harness + deterministic hill-climb blender (code-owned blend step at the end of ITERATE); researcher model A/B (`ml_researcher` → claude-sonnet-5.5) | ✅ ([design](designs/14-oof-blender.md); live: correct, ~zero gain on near-identical candidates) |
 | 4.4 | Evidence-driven strategy ([C0004](changes/C0004-evidence-driven-strategy.md)): public-notebook scout → planner digest; generic representation-first prompts; paired-noise gate/reviewer wording; connection-blip retry budget; duplicate-blend fix | ✅ ([design](designs/15-notebook-scout.md); live test in progress) |
-| 4.5 | Paired-fold submission gate (code) + reviewer re-review fix (REVISE'd candidates re-picked forever) | ⬜ |
+| 4.5 | Paired-fold submission gate + reviewer re-review fix (skip candidates with a verdict; revise the best REVISE'd candidate first, with lineage) + `slayer competitions` browse command (Q0004 → D0008) | ✅ |
 
 ## 12. Testing Strategy
 
@@ -360,9 +360,10 @@ Decisions are recorded as ADRs in [`decisions/`](decisions/); open questions liv
 | D5 | Storage | Event-sourced: JSONL journal (events + agent blackboard + source of truth) + SQLite candidate registry (entity state, rebuildable from journal) | [D0005](decisions/D0005-storage-journal-and-sqlite-registry.md) |
 | D6 | Model routing | Fast Gemini Flash tier default (D0006); free reasoning model as per-agent fallback | [D0006](decisions/D0006-model-routing-gemini-flash.md) |
 | D7 | Shortfall handling | Automatic bounded re-entry rounds (gate → REPLAN → ITERATE…MONITOR), ≤ `max_rounds` | [D0007](decisions/D0007-bounded-reentry-rounds.md) |
+| D8 | Competition discovery | `slayer competitions` browse command (filters); no picker, no auto-selection | [D0008](decisions/D0008-competition-browse-command.md) |
 
 **Open questions:** [Q0003](questions/Q0003-interruption-safety.md) (graceful SIGINT
-still open), [Q0004](questions/Q0004-competition-discovery-ux.md) (discovery UX).
+still open).
 
 ## 15. Documentation Conventions (`docs/plan/`)
 

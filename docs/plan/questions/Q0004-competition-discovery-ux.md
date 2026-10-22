@@ -1,6 +1,6 @@
 # Q0004 — How does the user pick a competition? (discovery UX)
 
-- **Status:** open (documented; user decision pending on flavor)
+- **Status:** settled → [D0008](../decisions/D0008-competition-browse-command.md) (option 1 implemented 2026-10-22)
 - **Raised:** 2026-10-20
 - **Blocks:** nothing — `slayer run <ref>` works today with the exact ref.
 
