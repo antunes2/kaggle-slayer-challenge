@@ -80,7 +80,8 @@ def test_unpriced_call_reports_none():
     assert client.cost.priced_calls == 0
 
 
-def test_structured_output_validates_and_sends_schema():
+def test_structured_output_validates_without_response_format():
+    """Schema enforcement is prompt + validation; response_format is never sent."""
     seen = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -89,15 +90,12 @@ def test_structured_output_validates_and_sends_schema():
         return httpx.Response(200, json=_response_payload(content))
 
     client = _client(handler)
-    response, verdict = client.complete_structured(
+    _, verdict = client.complete_structured(
         [{"role": "user", "content": "review"}], "test/model", _Verdict
     )
     assert verdict.decision == "approve"
     assert verdict.confidence == 0.9
-    response_format = seen["payload"]["response_format"]
-    assert response_format["type"] == "json_schema"
-    assert response_format["json_schema"]["name"] == "_Verdict"
-    assert "properties" in response_format["json_schema"]["schema"]
+    assert "response_format" not in seen["payload"]
 
 
 def test_structured_output_falls_back_to_braces_extraction():

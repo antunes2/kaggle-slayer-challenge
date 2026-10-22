@@ -65,11 +65,18 @@ per-run budget enforcement happens in step 0.3 / Phase 3 — the client only mea
 
 ## Retro
 
-Implemented as designed. Notes:
-- The `{...}` fallback extraction is genuinely needed even with `json_schema` requested —
-  free-tier models don't always honor `response_format` (they also invent their own JSON
-  shape; embedding the schema in the prompt — done in `Agent.run_structured` — is the
-  reliable path for weak models).
+Implemented as designed; hardened by live findings. Notes:
+- **`response_format` was removed entirely** (2026-10-21): strict providers (OpenAI
+  models via OpenRouter) validate the JSON schema we sent and reject pydantic's raw
+  `model_json_schema()` output ("'required' is required to be an array"), while lax
+  providers mostly ignored it anyway. The real enforcement mechanism is the
+  prompt-embedded schema + `{...}` fallback extraction + pydantic validation — which
+  has carried every live success. Schema strictness now lives where it can't break
+  requests.
+- The `{...}` fallback extraction is genuinely needed — models don't always honor
+  schema requests and love wrapping JSON in prose/fences (they also invent their own
+  JSON shape; embedding the schema in the prompt — done in `Agent.run_structured` — is
+  the reliable path for weak models).
 - Reasoning models can exhaust `max_tokens` before emitting any content
   (`content: null`, `finish_reason: "length"`). The client now raises an actionable
   `LLMError` for this case; default agent `max_tokens` is 16384.

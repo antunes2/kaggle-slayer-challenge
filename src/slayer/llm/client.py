@@ -100,23 +100,14 @@ class LLMClient:
         *,
         temperature: float = 0.2,
         max_tokens: int = 4096,
-        response_model: type[BaseModel] | None = None,
     ) -> LLMResponse:
-        """Run one chat completion, optionally requesting a JSON schema output."""
+        """Run one chat completion (schema enforcement lives in the prompt + validation)."""
         payload: dict = {
             "model": model,
             "messages": [dict(m) for m in messages],
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        if response_model is not None:
-            payload["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": response_model.__name__,
-                    "schema": response_model.model_json_schema(),
-                },
-            }
         data = self._request(payload)
         return self._parse(data, fallback_model=model)
 
@@ -135,7 +126,6 @@ class LLMClient:
             model,
             temperature=temperature,
             max_tokens=max_tokens,
-            response_model=response_model,
         )
         parsed = self._validate(response.content, response_model)
         return response, parsed

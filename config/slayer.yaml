@@ -4,6 +4,8 @@ defaults:
   submissions_per_day: 4
   autonomy: approve-first
   dry_run: true
+  refresh_data: false
+  harness_timeout_s: 1800
 
 paths:
   runs_dir: runs
