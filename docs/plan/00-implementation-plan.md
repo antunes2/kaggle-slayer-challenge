@@ -1,6 +1,6 @@
 # Kaggle Slayer — Implementation Plan
 
-> **Status:** v1.9 (gap corrections done; Phase 2b next — live run pending user execution) · **Updated:** 2026-10-20 · **Owner:** Gabriel
+> **Status:** v2.1 (all 9 phases + robustness fixes; run 20261022-001955 awaiting one resume to record its real LB score and finish) · **Updated:** 2026-10-21 · **Owner:** Gabriel
 >
 > This is the living master plan. It is updated as the project evolves. Feature-level
 > design docs live alongside it as numbered files (see §15).
@@ -275,7 +275,7 @@ runs/                      # run artifacts (gitignored)
 | **2. Baseline & first submission (mocked)** | PLANNING → BASELINE → REVIEW → SUBMIT | CV harness; planner `StrategyPlan`; researcher pipeline codegen; reviewer gate; `SubmissionSink` abstraction (**MockSink** for MVP); submission approval flow | End-to-end pipeline completes with submission recorded via MockSink; approval + quota logic exercised; zero real quota spent | ✅ |
 | **2b. First live submission** | go live *(re-sequenced after Phase 3, C0003)* | fresh `--live` run on the closed playground (user-confirmed submission under approve-first) | Real submission accepted by Kaggle; score recorded in journal | 🔶 |
 | **3. Iteration engine & resilience** | the heart | experiment loop (propose → run → review → submit per roadmap step, with repair-retry); budget enforcement; `slayer resume`; harness timeout handling (Q0002) | ≥5 sequential iterations with measurable CV improvement; interrupted run resumes without redoing completed phases | ✅ |
-| **4. Monitoring & leaderboard** | MONITOR + ops | leaderboard monitoring; deadline awareness; `leaderboard` command; LB-score polling into the registry; 24h ops | 24h unattended run on a playground comp without incident | ⬜ |
+| **4. Monitoring & leaderboard** | MONITOR + ops | MONITOR phase (LB-score collection + percentile-vs-target awareness); `leaderboard` command; deadline awareness; iterate re-entry decision | Real LB scores recorded in the registry; position vs target reported from a live run | 🔶 |
 | **5. Autonomy & polish** | UX depth | daemon + `attach`; `slayer chat` REPL; richer live view; agentic orchestrator upgrade (dynamic replanning); cost report | User can steer a live run via chat; top-20% achieved on target comp | ⬜ |
 
 Phases 0–2 form the **MVP slice**: every architectural piece exists but shallow (all
@@ -316,6 +316,14 @@ submissions mocked). Phase 2b is the go-live moment. Phases 3–5 deepen the loo
 | 3.1b | Gap corrections from live validation: post-iterate revise-retry (one bounded repair on an unactioned REVISE verdict) + LLM cost visibility in `slayer status` | ✅ |
 | 3.2 | `slayer resume <run>`: resume paused/failed runs without redoing completed phases (registry-driven skip logic) | ✅ ([design](designs/11-resume.md)) |
 | 3.3 | Harness timeout handling per [Q0002](questions/Q0002-harness-timeout-handling.md): configurable budget, budget-aware researcher prompt, probe fold + incremental fold reporting + harness self-deadline (Q0003.1) | ✅ |
+
+**Phase 4 step breakdown:**
+
+| Step | Scope | Status |
+|------|-------|--------|
+| 4.1 | MONITOR phase: real LB-score collection for submitted candidates (registry `record_submission`), percentile-vs-target position reporting; `slayer leaderboard` command | ✅ ([design](designs/12-monitor.md)) |
+| 4.1b | Robustness fixes from the live resume: bounded step retries (max 3 attempts/step across resumes), CatBoost/XGBoost prompt contracts, cost estimation fallback (budget enforcement was inert), iteration terminal narration | ✅ |
+| 4.2 | Deadline awareness + iterate re-entry decision on target shortfall (decision organ; question doc pending) | ⬜ |
 
 ## 12. Testing Strategy
 

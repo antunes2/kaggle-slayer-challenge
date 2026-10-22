@@ -33,7 +33,11 @@ status), and make Ctrl+C semantics match the plan. **(3)** deferred until proven
 necessary. Suggested slot: fold (1) into step 3.3 (it shares the budget plumbing);
 (2) into Phase 4 ops.
 
-**Update 2026-10-20:** option (1) is now **implemented** (step 3.3: the harness
-self-enforces its budget via SIGALRM). Note it is best-effort — during long C calls
-(e.g. a LightGBM fit) the alarm raises only when Python regains control; the parent's
-SIGKILL remains the authoritative enforcer. Option (2) remains open for Phase 4.
+**Update 2026-10-20:** option (1) implemented (step 3.3: SIGALRM self-deadline).
+**Update 2026-10-21 — live incident confirming the caveat:** a user-stopped run left
+an orphan CatBoost harness running at ~600% CPU for 84 minutes — 3× past its budget —
+because SIGALRM cannot interrupt a long C fit and the parent (the authoritative
+killer) was already dead. Process killed manually. The bounded-retry cap (design 10
+addendum) prevents this specific step from re-spawning, but the general orphan risk
+remains; a detached watchdog (runner-spawned killer process) is the candidate fix if
+incidents recur. Option (2) (graceful SIGINT → paused status) remains open for Phase 4.

@@ -181,6 +181,10 @@ def _evaluate_proposal(
             status="error",
             error=f"syntax error: {exc}",
         )
+    ctx.say(
+        f"  {record.id}: evaluating ({protocol.k_folds} folds, "
+        f"budget {ctx.run.harness_timeout_s}s) — silence during CV is normal"
+    )
     result = run_candidate(
         ctx.run,
         record.id,
@@ -209,14 +213,15 @@ def baseline_phase(ctx: RunContext) -> None:
 
     plan = StrategyPlan.model_validate_json(strategy_json)
     step = sorted(plan.roadmap, key=lambda s: s.priority)[0]
-    existing = [
-        r
-        for r in ctx.registry.list()
-        if r.params.get("roadmap_step") == step.title and r.status != "failed"
-    ]
-    if existing:
-        ctx.say(f"  baseline for '{step.title}' already exists ({existing[0].id}) — skipping")
+    done_steps, attempts = _step_stats(ctx)
+    if step.title in done_steps:
+        ctx.say(f"  baseline for '{step.title}' already exists — skipping")
         return
+    if attempts.get(step.title, 0) >= MAX_STEP_ATTEMPTS:
+        raise CandidateRunError(
+            f"baseline step '{step.title}' exhausted {MAX_STEP_ATTEMPTS} attempts — "
+            f"inspect {ctx.run.workspace('models')}/ and the strategy before retrying"
+        )
     evaluation_metric = json.loads(competition_json).get("evaluation_metric") or ""
     protocol = build_cv_protocol(evaluation_metric, plan.cv)
 
@@ -307,6 +312,31 @@ def _budget_out(ctx: RunContext) -> bool:
     return False
 
 
+MAX_STEP_ATTEMPTS = 3
+
+
+def _step_stats(ctx: RunContext) -> tuple[set[str], dict[str, int]]:
+    """Return (steps with a non-failed candidate, total attempts per step)."""
+    done: set[str] = set()
+    counts: dict[str, int] = {}
+    for record in ctx.registry.list():
+        title = record.params.get("roadmap_step")
+        if not title:
+            continue
+        counts[title] = counts.get(title, 0) + 1
+        if record.status != "failed":
+            done.add(title)
+    return done, counts
+
+
+def _failure_head(result) -> str:
+    """First line of a harness failure, truncated for terminal narration."""
+    lines = (result.error or "").strip().splitlines()
+    if not lines:
+        return result.status
+    return lines[0][:90]
+
+
 def _pending_revision(ctx: RunContext):
     """Return (record, verdict) for a scored candidate with an unactioned REVISE verdict."""
     verdicts = ctx.journal.read(type=EventType.AGENT_OUTPUT, agent="reviewer")
@@ -370,13 +400,11 @@ def iterate_phase(ctx: RunContext) -> None:
     plan, competition = _load_plan(ctx)
     protocol = build_cv_protocol(competition.get("evaluation_metric") or "", plan.cv)
 
-    existing_steps = {
-        r.params.get("roadmap_step")
-        for r in ctx.registry.list()
-        if r.params.get("roadmap_step") and r.status != "failed"
-    }
+    done_steps, attempts = _step_stats(ctx)
     pending = [
-        s for s in sorted(plan.roadmap, key=lambda s: s.priority) if s.title not in existing_steps
+        s
+        for s in sorted(plan.roadmap, key=lambda s: s.priority)
+        if s.title not in done_steps and attempts.get(s.title, 0) < MAX_STEP_ATTEMPTS
     ]
 
     reports_dir = ctx.run.workspace("reports")
@@ -420,14 +448,20 @@ def iterate_phase(ctx: RunContext) -> None:
         proposal = propose(step)
         record, result = _evaluate_proposal(ctx, plan, proposal, protocol, step)
         if result.status != "ok":
-            ctx.say(f"  {record.id} failed ({result.status}) — one repair attempt")
+            ctx.say(
+                f"  {record.id} failed ({result.status}: {_failure_head(result)}) "
+                "— one repair attempt"
+            )
             if _budget_out(ctx):
                 return
             failure_note = f"Your previous attempt failed:\n{(result.error or '')[-600:]}"
             proposal = propose(step, extra=failure_note)
             record, result = _evaluate_proposal(ctx, plan, proposal, protocol, step)
             if result.status != "ok":
-                ctx.say(f"  {record.id} failed again — moving to next step")
+                ctx.say(
+                    f"  {record.id} failed again ({_failure_head(result)}) "
+                    f"— step '{step.title}' exhausted, moving to next step"
+                )
                 continue
         ctx.say(
             f"  {record.id} scored: {result.mean_score:.5f} +/- {result.std_score:.5f}"
@@ -562,6 +596,85 @@ def submit_phase(ctx: RunContext) -> None:
     )
 
 
+def _parse_score(raw: str | None) -> float | None:
+    """Parse a Kaggle score string into a float, tolerating None/blank."""
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        return float(str(raw).strip())
+    except ValueError:
+        return None
+
+
+def monitor_phase(ctx: RunContext) -> None:
+    """MONITOR: collect real LB scores for submitted candidates; report position vs target."""
+    if ctx.kaggle is None:
+        raise AnalysisError("monitor requires the kaggle client")
+    submissions = ctx.kaggle.submissions(ctx.run.competition)
+    by_ref = {s.ref: s for s in submissions}
+
+    for record in ctx.registry.list():
+        if record.status != "submitted" or record.lb_score is not None:
+            continue
+        if not record.submission_id or record.submission_id.startswith("mock-"):
+            continue
+        submission = by_ref.get(record.submission_id)
+        if submission is None:
+            continue
+        score = _parse_score(submission.public_score)
+        if score is None:
+            ctx.say(
+                f"  {record.id}: submission {submission.ref} "
+                f"status={submission.status} — no LB score yet"
+            )
+            continue
+        ctx.registry.record_lb(record.id, score, submission.ref)
+        ctx.say(f"  {record.id}: LB score {score:.5f} (submission {submission.ref})")
+
+    username = ctx.kaggle.ping()
+    entries = ctx.kaggle.leaderboard(ctx.run.competition)
+    total = len(entries)
+    our = next(
+        (
+            entry
+            for entry in entries
+            if entry.team_name
+            and str(entry.team_name).strip().lower() == str(username).strip().lower()
+        ),
+        None,
+    )
+    if our is None:
+        ctx.say(f"  leaderboard: our entry not found on the fetched page ({total} entries)")
+        ctx.journal.append(
+            agent="loop",
+            type=EventType.MONITOR_POSITION,
+            data={"entries_fetched": total, "our_entry": False},
+            run=ctx.run.run_id,
+        )
+        return
+    percentile = round(our.rank / total * 100, 2) if total else None
+    target = ctx.run.target_percentile
+    met = percentile is not None and percentile <= target
+    ctx.say(
+        f"  leaderboard: rank {our.rank}/{total} "
+        f"(top {percentile}%) — target top {target}%: "
+        + ("MET" if met else "NOT met")
+    )
+    ctx.journal.append(
+        agent="loop",
+        type=EventType.MONITOR_POSITION,
+        data={
+            "our_entry": True,
+            "rank": our.rank,
+            "total": total,
+            "percentile": percentile,
+            "target_percentile": target,
+            "met": met,
+        },
+        run=ctx.run.run_id,
+    )
+
+
 HANDLERS: dict[Phase, Handler] = {
     Phase.INIT: init_phase,
     Phase.DATA_COLLECTION: data_collection_phase,
@@ -571,4 +684,5 @@ HANDLERS: dict[Phase, Handler] = {
     Phase.ITERATE: iterate_phase,
     Phase.REVIEW: review_phase,
     Phase.SUBMIT: submit_phase,
+    Phase.MONITOR: monitor_phase,
 }

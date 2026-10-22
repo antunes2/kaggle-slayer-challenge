@@ -141,6 +141,21 @@ class CandidateRegistry:
         )
         return self.get(candidate_id)
 
+    def record_submission(self, candidate_id: str, submission_id: str) -> CandidateRecord:
+        """Mark a candidate submitted to Kaggle with its real submission id (LB later)."""
+        record = self.get(candidate_id)
+        self._apply_submission(candidate_id, submission_id)
+        self._emit(
+            EventType.CANDIDATE_STATUS,
+            {
+                "id": candidate_id,
+                "from": record.status,
+                "to": CandidateStatus.SUBMITTED,
+                "submission_id": submission_id,
+            },
+        )
+        return self.get(candidate_id)
+
     def record_cv(
         self, candidate_id: str, score: float, std: float | None = None
     ) -> CandidateRecord:
@@ -229,6 +244,8 @@ class CandidateRegistry:
                 registry._apply_cv(data["id"], data["cv_score"], data.get("cv_std"))
             elif event.type == EventType.CANDIDATE_STATUS:
                 registry._apply_status(data["id"], data["to"])
+                if data.get("submission_id"):
+                    registry._apply_submission(data["id"], data["submission_id"])
             elif event.type == EventType.CANDIDATE_LB:
                 registry._apply_lb(data["id"], data["lb_score"], data["submission_id"])
         return registry
@@ -291,6 +308,14 @@ class CandidateRegistry:
             self._conn.execute(
                 "UPDATE candidates SET lb_score=?, submission_id=?, status=? WHERE id=?",
                 (lb_score, submission_id, CandidateStatus.SUBMITTED, candidate_id),
+            )
+
+    def _apply_submission(self, candidate_id: str, submission_id: str) -> None:
+        """Store the real submission id and mark the candidate submitted (no LB yet)."""
+        with self._conn:
+            self._conn.execute(
+                "UPDATE candidates SET submission_id=?, status=? WHERE id=?",
+                (submission_id, CandidateStatus.SUBMITTED, candidate_id),
             )
 
     def _to_record(self, row: sqlite3.Row) -> CandidateRecord:

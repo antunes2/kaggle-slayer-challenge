@@ -89,7 +89,7 @@ class KaggleSink(SubmissionSink):
         """Submit the candidate's file to Kaggle and record the acceptance."""
         submission_file = run.workspace("models") / record.id / "submission.csv"
         ref = self._kaggle.submit(run.competition, submission_file, message)
-        registry.set_status(record.id, "submitted")
+        registry.record_submission(record.id, ref.id)
         journal.append(
             agent="submission",
             type=EventType.SUBMISSION_ACCEPTED,

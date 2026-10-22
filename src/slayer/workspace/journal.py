@@ -24,6 +24,7 @@ class EventType:
     SUBMISSION_ACCEPTED = "submission.accepted"
     SUBMISSION_MOCKED = "submission.mocked"
     ITERATE_SKIPPED = "iterate.skipped"
+    MONITOR_POSITION = "monitor.position"
     USER_GUIDANCE = "user.guidance"
     BUDGET_WARNING = "budget.warning"
 

@@ -25,6 +25,7 @@ class LLMResponse(BaseModel):
     model: str
     usage: LLMUsage = LLMUsage()
     cost_usd: float | None = None
+    cost_estimated: bool = False
 
 
 class CostReport(BaseModel):
@@ -82,6 +83,7 @@ class LLMClient:
         self._tokens = 0
         self._usd = 0.0
         self._priced_calls = 0
+        self._prices: dict[str, tuple[float, float]] | None = None
 
     @property
     def cost(self) -> CostReport:
@@ -181,6 +183,25 @@ class LLMClient:
         assert last_error is not None
         raise last_error
 
+    def _fetch_model_prices(self) -> dict[str, tuple[float, float]]:
+        """Fetch per-token (prompt, completion) prices from the catalog, cached."""
+        if self._prices is not None:
+            return self._prices
+        prices: dict[str, tuple[float, float]] = {}
+        try:
+            with httpx.Client(timeout=self._timeout_s, transport=self._transport) as client:
+                response = client.get(f"{self._base_url}/models")
+                response.raise_for_status()
+                for model in response.json().get("data", []):
+                    pricing = model.get("pricing") or {}
+                    p_in = float(pricing.get("prompt") or 0)
+                    p_out = float(pricing.get("completion") or 0)
+                    prices[str(model.get("id"))] = (p_in, p_out)
+        except Exception:
+            prices = {}
+        self._prices = prices
+        return prices
+
     def _parse(self, data: dict, *, fallback_model: str) -> LLMResponse:
         """Convert an OpenRouter response into an LLMResponse, tracking usage."""
         choices = data.get("choices") or []
@@ -204,6 +225,14 @@ class LLMClient:
         cost = data.get("cost")
         if not isinstance(cost, (int, float)):
             cost = None
+        estimated = False
+        if cost is None:
+            prices = self._fetch_model_prices()
+            price = prices.get(str(data.get("model", ""))) or prices.get(fallback_model)
+            if price:
+                p_in, p_out = price
+                cost = round(usage.prompt_tokens * p_in + usage.completion_tokens * p_out, 8)
+                estimated = True
         self._calls += 1
         self._tokens += usage.total_tokens
         if cost is not None:
@@ -214,6 +243,7 @@ class LLMClient:
             model=data.get("model", fallback_model),
             usage=usage,
             cost_usd=cost,
+            cost_estimated=estimated,
         )
 
     @staticmethod

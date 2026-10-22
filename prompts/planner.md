@@ -12,6 +12,8 @@ run to reach a competitive result, not a generic textbook.
 
 Rules:
 
+- The strong tabular families are LightGBM, XGBoost, and CatBoost — rotate between
+  them; their errors decorrelate, which is what makes late-run ensembles work.
 - Confirm `problem_type` and `target_column` from the analyst's report; disagree only
   with concrete evidence.
 - `cv`: choose `k_folds` (3-5; 5 is the default sweet spot; use 3 only when the
@@ -28,8 +30,9 @@ Rules:
   1. The simplest possible baseline — one strong gradient boosting model on raw
      features (LightGBM/CatBoost). This anchors the run and calibrates CV noise.
   2. Feature groups from the analyst's feature plan, added one group at a time.
-  3. Alternative model family (CatBoost if baseline was LightGBM) on the best
-     feature set.
+  3. Alternative model family (XGBoost or CatBoost if the baseline was LightGBM) on
+     the best feature set — a different family is also the raw material for a later
+     blend, so a strong second family pays twice.
   4. Targeted tuning of the surviving family (depth/learning-rate tradeoff, not
      grid-search theater).
   5. Blending/ensembling of validated OOF predictions — only at the end, only if

@@ -20,8 +20,8 @@ make must be implemented in the code, not in comments.
     astype, clipping, binning — all deterministic, no randomness without a fixed seed.
   - Return a **dense pandas DataFrame** (never a sparse matrix).
   - It receives feature columns ONLY (never the target; possibly an `id` column).
-- Allowed libraries: pandas, numpy, scikit-learn, lightgbm, catboost. No file I/O,
-  no network, no prints required (stdout is captured).
+- Allowed libraries: pandas, numpy, scikit-learn, lightgbm, xgboost, catboost.
+  No file I/O, no network, no prints required (stdout is captured).
 - The harness handles: target extraction, train/test column alignment (unseen
   categories become zero), CV folds, metric scoring, and the submission file.
 - Use the `id` column only if the strategy guidance explicitly allows it.
@@ -32,13 +32,20 @@ make must be implemented in the code, not in comments.
 
 ## Professional defaults for tabular problems
 
-- **Gradient boosting first**: LightGBM or CatBoost are the strongest starting points
-  for tabular data. A solid baseline:
+- **Gradient boosting first**: LightGBM, XGBoost, or CatBoost are the strongest
+  starting points for tabular data. A solid baseline:
   `LGBMClassifier(n_estimators=500-1000, learning_rate=0.03-0.05, num_leaves=31-64,
   subsample=0.8, colsample_bytree=0.8, random_state=42, n_jobs=-1, verbose=-1)`.
-- **Categoricals**: for tree models, convert to `category` dtype and let LightGBM
-  handle it natively — do NOT one-hot encode moderate/high-cardinality categoricals
-  for tree models. One-hot is for linear models only.
+- **Categorical handling differs per family — get this right**:
+  - LightGBM: auto-detects pandas `category` dtype. No extra arguments needed.
+  - XGBoost: use `XGBClassifier(tree_method="hist", enable_categorical=True, ...)`
+    and pass `device="cuda"` only if certain of GPU availability.
+  - CatBoost: does NOT auto-detect category dtype — you MUST pass
+    `cat_features=[column names]` to the `CatBoostClassifier(...)` constructor in
+    `build_model()` (LightGBM-style code with a CatBoost model raises
+    CatBoostError and fails the candidate).
+  - Never one-hot encode moderate/high-cardinality categoricals for tree models.
+    One-hot is for linear models only.
 - **Category-dtype order rule (critical)**: convert categoricals to `category` dtype
   as the **LAST step** of `make_features`. Never do arithmetic (multiply/divide/add/
   subtract) on a category-dtype column — pandas raises a TypeError and the candidate

@@ -82,3 +82,12 @@ Implemented as designed; hardened by live findings. Notes:
   `LLMError` for this case; default agent `max_tokens` is 16384.
 - Cost field: OpenRouter includes top-level `cost` per completion; we only trust it when
   the value is numeric, else `cost_usd=None` and the call counts as unpriced.
+
+### Addendum 2026-10-21: cost estimation fallback
+
+Live finding: OpenRouter returned no `cost` field for this account (journal showed
+`$0.0000` despite real gpt-5-mini calls) — budget enforcement was silently inert.
+Fixed: when the provider omits cost, the client estimates it from token usage ×
+per-model catalog prices (fetched once from `/models`, cached); responses carry
+`cost_estimated: true` and the journal records the flag. If the catalog is also
+unreachable, costs stay None exactly as before.

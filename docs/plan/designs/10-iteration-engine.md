@@ -103,3 +103,15 @@ noise-level candidates), reviewer approve/revise honesty. Phase 3 acceptance met
 
 Also surfaced live: OpenRouter 429s need provider-grade backoff — the LLM client now
 honors `Retry-After` and backs off 15/30/45s on rate limits instead of 0.5–4s.
+
+### Addendum 2026-10-21: bounded retries (from a live resume incident)
+
+Live finding: failed roadmap steps were retried on *every* resume (deliberate for
+crash-repair, unbounded in practice — a step that failed its pass consumed another
+candidate per resume). Fixed: **a roadmap step allows at most 3 candidate attempts
+total** (initial + repair + one resume retry), counted from the registry including
+failed and stuck-proposed candidates; the baseline raises `exhausted 3 attempts`
+instead of blind retries. Along the way: terminal narration now announces each
+harness evaluation ("evaluating (5 folds, budget Ns) — silence during CV is normal")
+and failure lines carry the first line of the actual error, since "failed (error)"
+read ambiguously to a human watching the loop.

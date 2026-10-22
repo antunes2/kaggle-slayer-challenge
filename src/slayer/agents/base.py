@@ -73,6 +73,7 @@ class Agent:
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
                 "cost_usd": response.cost_usd,
+                "cost_estimated": response.cost_estimated,
             },
             run=self._run_id,
         )

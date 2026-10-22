@@ -366,6 +366,50 @@ def status(
 
 
 @app.command()
+def leaderboard(
+    competition: str = typer.Argument(..., help="Kaggle competition ref"),
+    env_file: Path = typer.Option(Path(".env"), "--env-file"),
+    page_size: int = typer.Option(20, "--page-size", help="Entries to fetch"),
+) -> None:
+    """Show the competition leaderboard and our position on it."""
+    secrets = load_secrets(env_file)
+    if not secrets.kaggle_api_token:
+        typer.secho("KAGGLE_API_TOKEN missing — cannot read the leaderboard.", fg="red")
+        raise typer.Exit(1)
+    try:
+        kaggle = KaggleClient.from_token(secrets.kaggle_api_token)
+        username = kaggle.ping()
+    except KaggleError as exc:
+        typer.secho(f"kaggle authentication failed: {exc}", fg="red")
+        raise typer.Exit(1) from exc
+    entries = kaggle.leaderboard(competition, page_size=page_size)
+    if not entries:
+        typer.echo("No leaderboard entries (competition may not have one yet).")
+        return
+    total = len(entries)
+    typer.secho(f"leaderboard: {competition} (showing {total} entries)", bold=True)
+    def _is_us(entry) -> bool:
+        """Match a leaderboard entry against the authenticated username."""
+        return bool(
+            entry.team_name
+            and str(entry.team_name).strip().lower() == str(username).strip().lower()
+        )
+
+    for entry in entries[:10]:
+        marker = "  <- us" if _is_us(entry) else ""
+        typer.echo(f"  {entry.rank:>4}  {str(entry.score or '-'):>10}  {entry.team_name}{marker}")
+    our = next((e for e in entries if _is_us(e)), None)
+    if our is not None:
+        typer.secho(
+            f"our position: rank {our.rank}/{total} "
+            f"(top {round(our.rank / total * 100, 2)}%)",
+            fg="green",
+        )
+    else:
+        typer.echo(f"our entry is not on the fetched page ({total} entries)")
+
+
+@app.command()
 def journal(
     run_id: str = typer.Argument(..., help="Run id"),
     limit: int = typer.Option(20, "--limit", "-l", help="Show the last N events"),

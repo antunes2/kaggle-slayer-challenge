@@ -111,6 +111,18 @@ class _FakeRunKaggle:
 
         return [SimpleNamespace(name="train.csv", total_bytes=10)]
 
+    def ping(self) -> str:
+        """Fake authenticated username."""
+        return "test-user"
+
+    def submissions(self, competition: str):
+        """No prior submissions."""
+        return []
+
+    def leaderboard(self, competition: str, page_size: int = 50):
+        """Empty leaderboard."""
+        return []
+
     def download_files(self, competition: str, target_dir, force: bool = False):
         import zipfile
 
@@ -249,7 +261,7 @@ def test_run_command_end_to_end(tmp_path, monkeypatch) -> None:
     )
     assert result.exit_code == 0
     assert "run created" in result.output
-    assert "paused" in result.output
+    assert "finished" in result.output
     assert "submitted" in result.output
 
     runs = [child for child in (tmp_path / "runs").iterdir() if (child / "run.json").is_file()]
