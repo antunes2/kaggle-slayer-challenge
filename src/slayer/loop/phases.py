@@ -181,7 +181,14 @@ def _evaluate_proposal(
             status="error",
             error=f"syntax error: {exc}",
         )
-    result = run_candidate(ctx.run, record.id, protocol, plan.problem_type, plan.target_column)
+    result = run_candidate(
+        ctx.run,
+        record.id,
+        protocol,
+        plan.problem_type,
+        plan.target_column,
+        timeout_s=ctx.run.harness_timeout_s,
+    )
     if result.status == "ok":
         ctx.registry.record_cv(record.id, result.mean_score, result.std_score)
     else:
@@ -225,11 +232,13 @@ def baseline_phase(ctx: RunContext) -> None:
         feature_plan_json=feature_plan_json,
         guidance=plan.guidance,
         roadmap_step=step,
+        time_budget_s=ctx.run.harness_timeout_s,
     )
     ctx.journal.append(
         agent="ml_researcher",
         type=EventType.AGENT_OUTPUT,
         data={
+            "roadmap_step": step.title,
             "model_family": proposal.model_family,
             "feature_ideas_used": proposal.feature_ideas_used,
         },
@@ -337,6 +346,7 @@ def iterate_phase(ctx: RunContext) -> None:
             guidance=plan.guidance,
             roadmap_step=step,
             iteration_context=_iteration_context(ctx) + (f"\n\n{extra}" if extra else ""),
+            time_budget_s=ctx.run.harness_timeout_s,
         )
         ctx.journal.append(
             agent="ml_researcher",

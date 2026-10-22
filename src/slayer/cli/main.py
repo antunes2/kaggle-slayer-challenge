@@ -192,6 +192,9 @@ def run(
     refresh_data: bool = typer.Option(
         None, "--refresh-data/--use-cache", help="Force a data redownload (default from config)"
     ),
+    harness_timeout_s: int = typer.Option(
+        None, "--harness-timeout-s", help="Per-candidate CV time budget in seconds (default 600)"
+    ),
     submissions_per_day: int = typer.Option(
         None, help="Max Kaggle submissions per day (default from config)"
     ),
@@ -209,6 +212,7 @@ def run(
             "autonomy": autonomy,
             "dry_run": dry_run,
             "refresh_data": refresh_data,
+            "harness_timeout_s": harness_timeout_s,
             "submissions_per_day": submissions_per_day,
         }.items()
         if value is not None

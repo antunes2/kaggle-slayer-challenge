@@ -83,6 +83,87 @@ def test_harness_happy_path(tmp_path):
     assert len(lines) == 3
 
 
+SLOW_PIPELINE = '''
+import time
+import numpy as np
+from sklearn.base import BaseEstimator, ClassifierMixin
+
+class SlowModel(BaseEstimator, ClassifierMixin):
+    def fit(self, X, y):
+        time.sleep(3)
+        self.classes_ = ["No", "Yes"]
+        return self
+    def predict_proba(self, X):
+        return np.full((len(X), 2), 0.5)
+
+def build_model():
+    return SlowModel()
+'''
+
+SLEEP_FOREVER_PIPELINE = '''
+import time
+
+def build_model():
+    time.sleep(60)
+    return None
+'''
+
+
+def test_harness_error_pipeline_writes_structured_failure(tmp_path):
+    """A broken pipeline still yields a structured error result."""
+    _setup(tmp_path, BROKEN_PIPELINE)
+    exit_code = main(str(tmp_path / "cand"))
+
+    assert exit_code == 1
+    result = json.loads((tmp_path / "cand" / "cv_results.json").read_text(encoding="utf-8"))
+    assert result["status"] == "error"
+    assert "ValueError" in result["error"]
+
+
+def test_harness_probe_fold_aborts_slow_candidates(tmp_path):
+    """A fold-0 timing that predicts a budget blowout aborts after one fold."""
+    _setup(tmp_path, SLOW_PIPELINE)
+    config = json.loads((tmp_path / "cand" / "cv_config.json").read_text(encoding="utf-8"))
+    config["budget_s"] = 5
+    (tmp_path / "cand" / "cv_config.json").write_text(json.dumps(config), encoding="utf-8")
+
+    exit_code = main(str(tmp_path / "cand"))
+
+    assert exit_code == 1
+    result = json.loads((tmp_path / "cand" / "cv_results.json").read_text(encoding="utf-8"))
+    assert result["status"] == "error"
+    assert "probe fold" in result["error"]
+    assert len(result["folds"]) == 1
+    assert len(result["fold_times"]) == 1
+    assert result["fold_times"][0] >= 3.0
+
+
+def test_harness_self_enforced_deadline_writes_timeout(tmp_path):
+    """The harness's own alarm fires for orphan-style overruns with no parent."""
+    _setup(tmp_path, SLEEP_FOREVER_PIPELINE)
+    config = json.loads((tmp_path / "cand" / "cv_config.json").read_text(encoding="utf-8"))
+    config["budget_s"] = 2
+    (tmp_path / "cand" / "cv_config.json").write_text(json.dumps(config), encoding="utf-8")
+
+    exit_code = main(str(tmp_path / "cand"))
+
+    assert exit_code == 1
+    result = json.loads((tmp_path / "cand" / "cv_results.json").read_text(encoding="utf-8"))
+    assert result["status"] == "timeout"
+    assert "self-enforced" in result["error"]
+
+
+def test_harness_ok_result_carries_fold_times(tmp_path):
+    """Successful results include per-fold timings."""
+    _setup(tmp_path, GOOD_PIPELINE)
+    exit_code = main(str(tmp_path / "cand"))
+
+    assert exit_code == 0
+    result = json.loads((tmp_path / "cand" / "cv_results.json").read_text(encoding="utf-8"))
+    assert len(result["fold_times"]) == 2
+    assert all(t >= 0 for t in result["fold_times"])
+
+
 def test_harness_aligns_test_columns_to_train(tmp_path):
     """Unseen categories in test get zero-filled instead of breaking the pipeline."""
     _setup(tmp_path, UNSEEN_CATEGORY_PIPELINE)
@@ -99,12 +180,4 @@ def test_harness_aligns_test_columns_to_train(tmp_path):
     assert submission.startswith("id,Target")
 
 
-def test_harness_error_pipeline_writes_structured_failure(tmp_path):
-    """A broken pipeline still yields a structured error result."""
-    _setup(tmp_path, BROKEN_PIPELINE)
-    exit_code = main(str(tmp_path / "cand"))
 
-    assert exit_code == 1
-    result = json.loads((tmp_path / "cand" / "cv_results.json").read_text(encoding="utf-8"))
-    assert result["status"] == "error"
-    assert "ValueError" in result["error"]

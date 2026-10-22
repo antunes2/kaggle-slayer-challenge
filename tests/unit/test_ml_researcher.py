@@ -68,3 +68,25 @@ def test_propose_returns_code_and_journals(tmp_path: Path) -> None:
     calls = journal.read(type=EventType.AGENT_CALL)
     assert len(calls) == 1
     assert calls[0].agent == "ml_researcher"
+
+
+def test_propose_includes_time_budget(tmp_path: Path) -> None:
+    """The researcher prompt states the CV time budget when provided."""
+    llm = FakeLLM()
+    agent = MLResearcherAgent(
+        llm=llm,
+        config=AgentModelConfig(model="vendor/model"),
+        journal=Journal(tmp_path / "j.jsonl"),
+        run_id="run-1",
+    )
+    agent.propose(
+        profile_md="# profile",
+        data_report_json="{}",
+        feature_plan_json="{}",
+        guidance=[],
+        roadmap_step=STEP,
+        time_budget_s=600,
+    )
+    user_content = llm.calls[0][0][1]["content"]
+    assert "within 600s total" in user_content
+    assert "FAILS" in user_content

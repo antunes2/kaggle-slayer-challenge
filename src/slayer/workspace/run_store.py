@@ -34,6 +34,7 @@ class Run(BaseModel):
     autonomy: str
     dry_run: bool
     refresh_data: bool = False
+    harness_timeout_s: int = 600
     root: Path
 
     def workspace(self, name: str) -> Path:
@@ -89,6 +90,7 @@ class RunStore:
             autonomy=defaults.autonomy,
             dry_run=defaults.dry_run,
             refresh_data=defaults.refresh_data,
+            harness_timeout_s=defaults.harness_timeout_s,
             root=root,
         )
         self._save(run)

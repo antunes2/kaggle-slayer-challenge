@@ -20,6 +20,7 @@ class DefaultsConfig(BaseModel):
     autonomy: AutonomyPolicy = "approve-first"
     dry_run: bool = True
     refresh_data: bool = False
+    harness_timeout_s: int = Field(default=600, ge=30)
 
 
 class PathsConfig(BaseModel):

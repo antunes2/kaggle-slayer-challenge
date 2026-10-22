@@ -25,6 +25,7 @@ class CVResult(BaseModel):
     metric: str
     status: str
     folds: list[FoldScore] = Field(default_factory=list)
+    fold_times: list[float] = Field(default_factory=list)
     mean_score: float | None = None
     std_score: float | None = None
     higher_is_better: bool = True

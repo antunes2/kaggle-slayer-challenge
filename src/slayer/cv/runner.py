@@ -48,6 +48,7 @@ def run_candidate(
         "k_folds": protocol.k_folds,
         "seed": protocol.seed,
         "stratified": protocol.stratified,
+        "budget_s": timeout_s,
     }
     (candidate_dir / "cv_config.json").write_text(
         json.dumps(config, indent=2), encoding="utf-8"
@@ -70,11 +71,20 @@ def run_candidate(
             _kill_process_group(process)
 
     if timed_out:
+        partial = _read_partial(candidate_dir)
+        error = f"harness timeout: exceeded {timeout_s}s and was killed"
+        if partial and partial.folds:
+            error += (
+                f"; completed {len(partial.folds)} fold(s) "
+                f"(fold times: {partial.fold_times}) before the kill"
+            )
         return CVResult(
             candidate_id=candidate_id,
             metric=protocol.metric,
             status="timeout",
-            error=f"harness exceeded timeout of {timeout_s}s and was killed",
+            folds=partial.folds if partial else [],
+            fold_times=partial.fold_times if partial else [],
+            error=error,
             pipeline_sha256=_pipeline_sha(candidate_dir),
         )
 
@@ -87,7 +97,26 @@ def run_candidate(
             error=f"harness produced no results; log tail:\n{_log_tail(log_path)}",
             pipeline_sha256=_pipeline_sha(candidate_dir),
         )
-    return CVResult.model_validate_json(results_path.read_text(encoding="utf-8"))
+    result = CVResult.model_validate_json(results_path.read_text(encoding="utf-8"))
+    if result.status == "running":
+        return result.model_copy(
+            update={
+                "status": "error",
+                "error": "harness exited while still running (crashed or killed mid-fold)",
+            }
+        )
+    return result
+
+
+def _read_partial(candidate_dir: Path) -> CVResult | None:
+    """Best-effort read of a partial cv_results.json left by a killed harness."""
+    results_path = candidate_dir / "cv_results.json"
+    if not results_path.exists():
+        return None
+    try:
+        return CVResult.model_validate_json(results_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
 
 
 def _kill_process_group(process: subprocess.Popen) -> None:
