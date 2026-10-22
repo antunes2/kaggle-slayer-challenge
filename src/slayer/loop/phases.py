@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from slayer.agents import DataAnalystAgent, MLResearcherAgent, PlannerAgent, ReviewerAgent
 from slayer.agents.planner import render_strategy_plan_md
@@ -612,13 +613,18 @@ def monitor_phase(ctx: RunContext) -> None:
         raise AnalysisError("monitor requires the kaggle client")
     submissions = ctx.kaggle.submissions(ctx.run.competition)
     by_ref = {s.ref: s for s in submissions}
+    by_description = {}
+    for submission in submissions:
+        found = re.search(r"slayer (cand-\d+):", submission.description or "")
+        if found:
+            by_description[found.group(1)] = submission
 
     for record in ctx.registry.list():
         if record.status != "submitted" or record.lb_score is not None:
             continue
-        if not record.submission_id or record.submission_id.startswith("mock-"):
+        if (record.submission_id or "").startswith("mock-"):
             continue
-        submission = by_ref.get(record.submission_id)
+        submission = by_ref.get(record.submission_id) or by_description.get(record.id)
         if submission is None:
             continue
         score = _parse_score(submission.public_score)
@@ -634,17 +640,30 @@ def monitor_phase(ctx: RunContext) -> None:
     username = ctx.kaggle.ping()
     entries = ctx.kaggle.leaderboard(ctx.run.competition)
     total = len(entries)
+    username_lower = str(username).strip().lower()
     our = next(
         (
             entry
             for entry in entries
-            if entry.team_name
-            and str(entry.team_name).strip().lower() == str(username).strip().lower()
+            if entry.team_name and str(entry.team_name).strip().lower() == username_lower
         ),
         None,
     )
     if our is None:
-        ctx.say(f"  leaderboard: our entry not found on the fetched page ({total} entries)")
+        our = next(
+            (
+                entry
+                for entry in entries
+                if entry.team_name and username_lower in str(entry.team_name).strip().lower()
+            ),
+            None,
+        )
+    if our is None:
+        ctx.say(
+            f"  leaderboard: our entry not found in {total} fetched entries "
+            f"(kaggle display name may differ from '{username}', "
+            "or we are beyond the pages fetched)"
+        )
         ctx.journal.append(
             agent="loop",
             type=EventType.MONITOR_POSITION,

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -244,18 +247,38 @@ class KaggleClient:
             )
         return infos
 
-    def leaderboard(self, competition: str, page_size: int = 50) -> list[LeaderboardEntry]:
-        """View the current leaderboard, ranked by enumeration."""
-        items = self._api.competition_leaderboard_view(competition, page_size=page_size) or []
+    def leaderboard(
+        self, competition: str, page_size: int = 100, max_pages: int = 10
+    ) -> list[LeaderboardEntry]:
+        """View the leaderboard, paginating up to max_pages.
+
+        The kaggle SDK prints the next-page token to stdout instead of returning
+        it, so we capture stdout during each page call and parse the token from
+        it — and the SDK's noise never reaches the user's terminal.
+        """
         entries: list[LeaderboardEntry] = []
-        for item in items:
-            if item is None:
-                continue
-            entries.append(
-                LeaderboardEntry(
-                    rank=len(entries) + 1,
-                    team_name=_text(getattr(item, "team_name", None)),
-                    score=_text(getattr(item, "score", None)),
+        page_token: str | None = None
+        for _ in range(max_pages):
+            captured = io.StringIO()
+            with contextlib.redirect_stdout(captured):
+                items = (
+                    self._api.competition_leaderboard_view(
+                        competition, page_size=page_size, page_token=page_token
+                    )
+                    or []
                 )
-            )
+            for item in items:
+                if item is None:
+                    continue
+                entries.append(
+                    LeaderboardEntry(
+                        rank=len(entries) + 1,
+                        team_name=_text(getattr(item, "team_name", None)),
+                        score=_text(getattr(item, "score", None)),
+                    )
+                )
+            match = re.search(r"Next Page Token = (\S+)", captured.getvalue())
+            page_token = match.group(1) if match else None
+            if not page_token:
+                break
         return entries

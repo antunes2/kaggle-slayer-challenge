@@ -143,7 +143,7 @@ def test_submissions_maps_status_enum_name() -> None:
 
 def test_leaderboard_enumerates_ranks() -> None:
     api = SimpleNamespace(
-        competition_leaderboard_view=lambda comp, page_size=50: [
+        competition_leaderboard_view=lambda comp, page_size=50, page_token=None: [
             SimpleNamespace(team_name="team-a", score="0.9"),
             None,
             SimpleNamespace(team_name="team-b", score="0.8"),

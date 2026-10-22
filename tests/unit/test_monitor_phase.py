@@ -29,10 +29,13 @@ class FakeMonitorKaggle:
 class _Sub:
     """Fake SubmissionInfo."""
 
-    def __init__(self, ref: str, status: str, public_score: str | None) -> None:
+    def __init__(
+        self, ref: str, status: str, public_score: str | None, description: str | None = None
+    ) -> None:
         self.ref = ref
         self.status = status
         self.public_score = public_score
+        self.description = description
 
 
 class _Entry:
@@ -79,7 +82,7 @@ def test_monitor_records_pending_lb_score(tmp_path) -> None:
     assert record.submission_id == "57503219"
     assert ctx.journal.read(type=EventType.CANDIDATE_LB)
     assert any("LB score 0.94212" in m for m in messages)
-    assert any("not found on the fetched page" in m for m in messages)
+    assert any("not found in" in m and "fetched entries" in m for m in messages)
 
 
 def test_monitor_skips_unscored_and_mock_submissions(tmp_path) -> None:
@@ -150,3 +153,40 @@ def test_monitor_requires_kaggle_client(tmp_path) -> None:
         raise AssertionError("expected AnalysisError")
     except Exception as exc:
         assert "kaggle client" in str(exc)
+
+
+def test_monitor_matches_submissions_by_description(tmp_path) -> None:
+    """Candidates submitted before record_submission existed are matched via description."""
+    kaggle = FakeMonitorKaggle(
+        submissions=[
+            _Sub(
+                "57503219",
+                "COMPLETE",
+                "0.94183",
+                description="slayer cand-0001: LightGBM CV=0.94172",
+            )
+        ],
+        entries=[],
+    )
+    store = RunStore(tmp_path / "runs")
+    run = store.create("comp-x", DefaultsConfig())
+    registry = store.registry(run)
+    record = registry.add(ModelCandidate(model_type="lightgbm"))
+    registry.record_cv(record.id, 0.94172, 0.001)
+    registry.set_status(record.id, "submitted")
+    ctx = RunContext(
+        run=run,
+        journal=store.journal(run),
+        registry=registry,
+        kaggle=kaggle,
+        store=store,
+    )
+    messages: list[str] = []
+    ctx.reporter = messages.append
+
+    monitor_phase(ctx)
+
+    updated = ctx.registry.get(record.id)
+    assert updated.lb_score == 0.94183
+    assert updated.submission_id == "57503219"
+    assert any("LB score 0.94183" in m for m in messages)
